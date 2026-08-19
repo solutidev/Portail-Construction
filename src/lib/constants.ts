@@ -171,3 +171,4 @@ export const CLIENT_KEY = "frx_portal_selected_client";
 export const NAV_SECTIONS_KEY = "frx_portal_nav_sections";
 export const SETTINGS_SECTIONS_KEY = "frx_portal_settings_sections";
 export const BOARD_COLLAPSE_KEY = "frx_portal_board_collapsed";
+export const DASHBOARD_LAYOUT_KEY = "frx_portal_dashboard_layout";
