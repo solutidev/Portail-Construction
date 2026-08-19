@@ -1,0 +1,327 @@
+import { integer, pgTable, real, serial, text, timestamp } from "drizzle-orm/pg-core";
+
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  email: text("email").notNull(),
+  password: text("password").notNull(),
+  user_type: text("user_type").notNull(),
+  title: text("title"),
+  phone: text("phone"),
+  is_active: integer("is_active").notNull(),
+  is_admin: integer("is_admin").notNull(),
+  avatar_initials: text("avatar_initials"),
+  locale: text("locale").notNull(),
+  theme: text("theme").notNull(),
+  all_clients: integer("all_clients").notNull().default(1),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const clients = pgTable("clients", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  company_name: text("company_name").notNull(),
+  email: text("email"),
+  phone: text("phone"),
+  address: text("address"),
+  city: text("city"),
+  state: text("state"),
+  zip: text("zip"),
+  notes: text("notes"),
+  status: text("status").notNull(),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const client_users = pgTable("client_users", {
+  id: serial("id").primaryKey(),
+  client_id: integer("client_id").notNull(),
+  user_id: integer("user_id").notNull(),
+  is_primary: integer("is_primary").notNull(),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const projects = pgTable("projects", {
+  id: serial("id").primaryKey(),
+  client_id: integer("client_id").notNull(),
+  name: text("name").notNull(),
+  project_number: text("project_number").notNull(),
+  description: text("description"),
+  status: text("status").notNull(),
+  phase: text("phase").notNull(),
+  project_type: text("project_type"),
+  address: text("address"),
+  city: text("city"),
+  start_date: text("start_date"),
+  end_date: text("end_date"),
+  budget: real("budget").notNull(),
+  spent: real("spent").notNull(),
+  sort_order: integer("sort_order").notNull(),
+  geo_lat: real("geo_lat"),
+  geo_lng: real("geo_lng"),
+  geo_radius_m: integer("geo_radius_m"),
+  require_geofence: integer("require_geofence").notNull().default(0),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const board_columns = pgTable("board_columns", {
+  id: serial("id").primaryKey(),
+  slug: text("slug").notNull(),
+  label: text("label").notNull(),
+  sort_order: integer("sort_order").notNull(),
+  is_system: integer("is_system").notNull(),
+  color: text("color").notNull(),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const project_members = pgTable("project_members", {
+  id: serial("id").primaryKey(),
+  project_id: integer("project_id").notNull(),
+  user_id: integer("user_id").notNull(),
+  role: text("role").notNull(),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const user_permissions = pgTable("user_permissions", {
+  id: serial("id").primaryKey(),
+  user_id: integer("user_id").notNull(),
+  module: text("module").notNull(),
+  scope_type: text("scope_type").notNull(),
+  scope_id: integer("scope_id").notNull(),
+  can_view: integer("can_view").notNull(),
+  can_create: integer("can_create").notNull(),
+  can_edit: integer("can_edit").notNull(),
+  can_delete: integer("can_delete").notNull(),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const project_tasks = pgTable("project_tasks", {
+  id: serial("id").primaryKey(),
+  project_id: integer("project_id").notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  start_date: text("start_date"),
+  end_date: text("end_date"),
+  status: text("status").notNull(),
+  priority: text("priority").notNull(),
+  assigned_to: integer("assigned_to"),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const budget_items = pgTable("budget_items", {
+  id: serial("id").primaryKey(),
+  project_id: integer("project_id").notNull(),
+  category: text("category").notNull(),
+  description: text("description").notNull(),
+  estimated: real("estimated").notNull(),
+  actual: real("actual").notNull(),
+  status: text("status").notNull(),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const calendar_events = pgTable("calendar_events", {
+  id: serial("id").primaryKey(),
+  project_id: integer("project_id").notNull(),
+  title: text("title").notNull(),
+  event_date: text("event_date").notNull(),
+  end_date: text("end_date"),
+  event_type: text("event_type").notNull(),
+  description: text("description"),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const documents = pgTable("documents", {
+  id: serial("id").primaryKey(),
+  project_id: integer("project_id").notNull(),
+  name: text("name").notNull(),
+  category: text("category").notNull(),
+  notes: text("notes"),
+  uploaded_by: integer("uploaded_by"),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const sharepoint_folders = pgTable("sharepoint_folders", {
+  id: serial("id").primaryKey(),
+  project_id: integer("project_id").notNull(),
+  name: text("name").notNull(),
+  sp_item_id: text("sp_item_id").notNull(),
+  sp_drive_id: text("sp_drive_id").notNull(),
+  path: text("path").notNull(),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const sharepoint_shares = pgTable("sharepoint_shares", {
+  id: serial("id").primaryKey(),
+  folder_id: integer("folder_id").notNull(),
+  client_id: integer("client_id").notNull(),
+  item_id: text("item_id").notNull().default(""),
+  can_view: integer("can_view").notNull(),
+  can_upload: integer("can_upload").notNull(),
+  can_edit: integer("can_edit").notNull(),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const rfis = pgTable("rfis", {
+  id: serial("id").primaryKey(),
+  project_id: integer("project_id").notNull(),
+  number: text("number").notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  status: text("status").notNull(),
+  assigned_to: integer("assigned_to"),
+  due_date: text("due_date"),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const change_orders = pgTable("change_orders", {
+  id: serial("id").primaryKey(),
+  project_id: integer("project_id").notNull(),
+  number: text("number").notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  amount: real("amount").notNull(),
+  status: text("status").notNull(),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const daily_logs = pgTable("daily_logs", {
+  id: serial("id").primaryKey(),
+  project_id: integer("project_id").notNull(),
+  log_date: text("log_date").notNull(),
+  weather: text("weather"),
+  crew_count: integer("crew_count").notNull(),
+  notes: text("notes"),
+  created_by: integer("created_by"),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const punch_items = pgTable("punch_items", {
+  id: serial("id").primaryKey(),
+  project_id: integer("project_id").notNull(),
+  title: text("title").notNull(),
+  location: text("location"),
+  status: text("status").notNull(),
+  priority: text("priority").notNull(),
+  assigned_to: integer("assigned_to"),
+  due_date: text("due_date"),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const safety_incidents = pgTable("safety_incidents", {
+  id: serial("id").primaryKey(),
+  project_id: integer("project_id").notNull(),
+  incident_date: text("incident_date").notNull(),
+  severity: text("severity").notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  status: text("status").notNull(),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const project_reports = pgTable("project_reports", {
+  id: serial("id").primaryKey(),
+  project_id: integer("project_id").notNull(),
+  name: text("name").notNull(),
+  sections: text("sections").notNull(),
+  created_by: integer("created_by"),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const activities = pgTable("activities", {
+  id: serial("id").primaryKey(),
+  project_id: integer("project_id"),
+  client_id: integer("client_id"),
+  user_id: integer("user_id"),
+  action: text("action").notNull(),
+  details: text("details"),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const access_groups = pgTable("access_groups", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  audience: text("audience").notNull(),
+  all_clients: integer("all_clients").notNull(),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const access_group_permissions = pgTable("access_group_permissions", {
+  id: serial("id").primaryKey(),
+  group_id: integer("group_id").notNull(),
+  module: text("module").notNull(),
+  can_view: integer("can_view").notNull(),
+  can_create: integer("can_create").notNull(),
+  can_edit: integer("can_edit").notNull(),
+  can_delete: integer("can_delete").notNull(),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const access_group_clients = pgTable("access_group_clients", {
+  id: serial("id").primaryKey(),
+  group_id: integer("group_id").notNull(),
+  client_id: integer("client_id").notNull(),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const user_access_groups = pgTable("user_access_groups", {
+  id: serial("id").primaryKey(),
+  user_id: integer("user_id").notNull(),
+  group_id: integer("group_id").notNull(),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const user_clients = pgTable("user_clients", {
+  id: serial("id").primaryKey(),
+  user_id: integer("user_id").notNull(),
+  client_id: integer("client_id").notNull(),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const billing_documents = pgTable("billing_documents", {
+  id: serial("id").primaryKey(),
+  client_id: integer("client_id").notNull(),
+  project_id: integer("project_id"),
+  kind: text("kind").notNull(),
+  number: text("number").notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  amount: real("amount").notNull(),
+  status: text("status").notNull(),
+  issued_on: text("issued_on"),
+  due_on: text("due_on"),
+  notes: text("notes"),
+  source_quote_id: integer("source_quote_id"),
+  line_items: text("line_items"),
+  subtotal: real("subtotal"),
+  tax_gst: real("tax_gst"),
+  tax_qst: real("tax_qst"),
+  po_number: text("po_number"),
+  sent_at: text("sent_at"),
+  sent_to: text("sent_to"),
+  signed_by: text("signed_by"),
+  signed_at: text("signed_at"),
+  signature: text("signature"),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const app_settings = pgTable("app_settings", {
+  id: serial("id").primaryKey(),
+  key: text("key").notNull(),
+  value: text("value"),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const time_punches = pgTable("time_punches", {
+  id: serial("id").primaryKey(),
+  user_id: integer("user_id").notNull(),
+  project_id: integer("project_id").notNull(),
+  kind: text("kind").notNull(),
+  punched_at: text("punched_at").notNull(),
+  lat: real("lat"),
+  lng: real("lng"),
+  accuracy: real("accuracy"),
+  distance_m: integer("distance_m"),
+  status: text("status").notNull(),
+  note: text("note"),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});

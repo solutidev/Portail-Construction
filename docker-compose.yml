@@ -1,0 +1,14 @@
+services:
+  app:
+    build: .
+    image: frx-portal:latest
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8080}:3000"
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+    # App data lives in each user's browser (IndexedDB). Rebuilding this
+    # container updates the app only — it never wipes project or user data.
