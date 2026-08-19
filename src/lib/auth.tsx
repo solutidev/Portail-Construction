@@ -143,22 +143,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [loadPermissions, applyPrefs]);
 
   const login = useCallback(async (email: string, password: string) => {
-    await dbReady;
-    const rows = await db.select().from(schema.users).where(eq(schema.users.email, email.trim().toLowerCase()));
-    const fallback = rows.length
-      ? rows
-      : await db.select().from(schema.users).where(eq(schema.users.email, email.trim()));
-    const match = fallback.find((u) => u.email.toLowerCase() === email.trim().toLowerCase());
-    if (!match || match.password !== password) return "login.error.invalid";
-    if (!match.is_active) return "login.error.inactive";
-    const session = toSession(match);
-    setRealUser(session);
-    setViewAsState("admin");
-    localStorage.removeItem(VIEW_AS_KEY);
-    applyPrefs(session);
-    localStorage.setItem(SESSION_KEY, String(match.id));
-    await loadPermissions(match.id, "admin", Boolean(session.is_admin));
-    return null;
+    try {
+      await dbReady;
+    } catch (err) {
+      console.error("database not ready", err);
+      return "login.error.invalid";
+    }
+    try {
+      const rows = await db.select().from(schema.users).where(eq(schema.users.email, email.trim().toLowerCase()));
+      const fallback = rows.length
+        ? rows
+        : await db.select().from(schema.users).where(eq(schema.users.email, email.trim()));
+      const match = fallback.find((u) => u.email.toLowerCase() === email.trim().toLowerCase());
+      if (!match || match.password !== password) return "login.error.invalid";
+      if (!match.is_active) return "login.error.inactive";
+      const session = toSession(match);
+      setRealUser(session);
+      setViewAsState("admin");
+      localStorage.removeItem(VIEW_AS_KEY);
+      applyPrefs(session);
+      localStorage.setItem(SESSION_KEY, String(match.id));
+      await loadPermissions(match.id, "admin", Boolean(session.is_admin));
+      return null;
+    } catch (err) {
+      console.error("login failed", err);
+      return "login.error.invalid";
+    }
   }, [loadPermissions, applyPrefs]);
 
   const setupAdmin = useCallback(

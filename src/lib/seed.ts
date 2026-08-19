@@ -127,10 +127,6 @@ async function seedBillingIfEmpty() {
   ]);
 }
 
-function isProductionBuild() {
-  return import.meta.env.VITE_PRODUCTION === "1" || import.meta.env.PROD;
-}
-
 export async function hasAnyUsers() {
   await dbReady;
   const existing = await db.select({ id: schema.users.id }).from(schema.users).limit(1);

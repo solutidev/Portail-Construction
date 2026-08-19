@@ -48,11 +48,16 @@ export function LoginPage() {
     e.preventDefault();
     setError(null);
     setSubmitting(true);
-    const msg = needsSetup
-      ? await setupAdmin({ name, email, password })
-      : await login(email, password);
-    setSubmitting(false);
-    if (msg) setError(t(msg as "login.error.invalid"));
+    try {
+      const msg = needsSetup
+        ? await setupAdmin({ name, email, password })
+        : await login(email, password);
+      if (msg) setError(t(msg as "login.error.invalid"));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("login.error.invalid"));
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   function pickLang(next: Locale) {
