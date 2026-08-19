@@ -1,46 +1,122 @@
-# Production install (Docker + GitHub + Postgres)
+# First production launch (Git + Docker + local Postgres)
 
-Production stores **all business data in Postgres** (Docker service `db`, volume `frx_pgdata`).  
-The browser no longer holds users, projects, or invoices. Updating the app image does **not** wipe that volume.
+This is a **clean first install**. Production uses **Postgres in Docker** on the same server. The browser is only the UI.
 
-Local App Builder / `npm run dev` still uses PGlite in the browser.
+Repo: https://github.com/solutidev/Portail-Construction
 
-## One-time install
+## 0. Server prerequisites
 
-On the server (Docker Engine + Compose plugin):
+Ubuntu / Debian:
+
+```bash
+sudo apt update
+sudo apt install -y git ca-certificates curl
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker "$USER"
+```
+
+Log out and back in so the `docker` group applies. Confirm:
+
+```bash
+docker --version
+docker compose version
+```
+
+Open host port **8080** (or change `PORT` later).
+
+## 1. Remove any previous broken install
+
+Only do this if you want a **true first launch**. This deletes the old Postgres volume.
+
+```bash
+sudo docker compose -f /opt/frx-portal/docker-compose.yml down -v || true
+sudo rm -rf /opt/frx-portal
+```
+
+## 2. Clone
 
 ```bash
 sudo git clone --branch main https://github.com/solutidev/Portail-Construction.git /opt/frx-portal
 cd /opt/frx-portal
-sudo cp .env.example .env
-sudo nano .env   # set POSTGRES_PASSWORD and match it in DATABASE_URL
+```
+
+Private repo: Git will ask for your username and a personal access token.
+
+## 3. Create `.env` from the sample
+
+```bash
+sudo cp /opt/frx-portal/.env.sample /opt/frx-portal/.env
+sudo nano /opt/frx-portal/.env
+```
+
+Required values (password must match in **both** places):
+
+```
+PORT=8080
+GIT_BRANCH=main
+POSTGRES_DB=frx
+POSTGRES_USER=frx
+POSTGRES_PASSWORD=frx-change-me
+DATABASE_URL=postgres://frx:frx-change-me@db:5432/frx
+SHAREPOINT_CLIENT_SECRET=
+```
+
+`db` in `DATABASE_URL` is the Docker service name. Do not use `localhost`.
+
+## 4. Build and start
+
+```bash
+cd /opt/frx-portal
 sudo bash scripts/install.sh
 ```
 
-Open `http://<server>:8080`. The first visit creates the administrator against Postgres.
+Or:
 
-## Update when GitHub has new commits
+```bash
+cd /opt/frx-portal
+sudo docker compose up -d --build
+```
+
+Wait until both services are healthy:
+
+```bash
+sudo docker compose -f /opt/frx-portal/docker-compose.yml ps
+```
+
+You should see `db` (healthy) and `app` (running).
+
+## 5. Sign in
+
+Open:
+
+```
+http://<server-ip>:8080
+```
+
+Hard-refresh the page. Use:
+
+| Role | Email | Password |
+|---|---|---|
+| Admin | admin@frxconstruction.ca | admin123 |
+| Project manager | marc@frxconstruction.ca | frx123 |
+| Client | sophie@nordique.com | client123 |
+
+These three accounts are created (or reset) automatically in Postgres on first API use.
+
+## 6. Later updates (keeps Postgres data)
 
 ```bash
 sudo bash /opt/frx-portal/scripts/update.sh
 ```
 
-That script pulls `main`, rebuilds the app, and leaves the Postgres volume and `.env` untouched.
+Never run `docker compose down -v` unless you intend to wipe the database.
 
-## Data you will not lose
-
-| What | Where | Survives `update.sh`? |
-|---|---|---|
-| Users, projects, invoices, ACLs | Postgres volume `frx_pgdata` | Yes |
-| SharePoint files | SharePoint | Yes |
-| Secrets | `/opt/frx-portal/.env` | Yes (never overwritten) |
-
-## Local production build (no Docker)
-
-Set `DATABASE_URL` to a reachable Postgres instance, then:
+## Troubleshooting
 
 ```bash
-npm ci
-npm run build
-npm start
+sudo docker compose -f /opt/frx-portal/docker-compose.yml logs --tail=100 app
+sudo docker compose -f /opt/frx-portal/docker-compose.yml logs --tail=50 db
+curl -s http://127.0.0.1:8080/healthz
 ```
+
+Password auth failed to Postgres usually means `.env` was changed after the volume was created. Either put the **original** password back, or wipe and reinstall from step 1.

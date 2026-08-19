@@ -23,12 +23,16 @@ fi
 
 cd "$INSTALL_DIR"
 if [[ ! -f .env ]]; then
-  sudo cp .env.example .env
-  echo "Created $INSTALL_DIR/.env — edit secrets before going live."
+  if [[ -f .env.sample ]]; then
+    sudo cp .env.sample .env
+  else
+    sudo cp .env.example .env
+  fi
+  echo "Created $INSTALL_DIR/.env from the sample. Edit POSTGRES_PASSWORD if needed."
 fi
 
 sudo docker compose up -d --build
 echo
 echo "Installed. Open http://<server>:${PORT:-8080}"
-echo "First visit: create the administrator account (stored in Postgres)."
+echo "Sign in with admin@frxconstruction.ca / admin123"
 echo "Later updates:  sudo bash $INSTALL_DIR/scripts/update.sh"

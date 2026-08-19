@@ -59,14 +59,22 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-function toSession(row: typeof schema.users.$inferSelect): SessionUser {
-  const { password: _pw, ...rest } = row;
-  void _pw;
+function toSession(row: Record<string, unknown> | typeof schema.users.$inferSelect): SessionUser {
+  const data = row as Record<string, unknown>;
   return {
-    ...rest,
-    user_type: rest.user_type as SessionUser["user_type"],
-    locale: rest.locale === "fr" ? "fr" : "en",
-    theme: rest.theme === "dark" ? "dark" : "light",
+    id: Number(data.id),
+    name: String(data.name ?? ""),
+    email: String(data.email ?? ""),
+    user_type: data.user_type === "external" ? "external" : "internal",
+    title: data.title == null ? null : String(data.title),
+    phone: data.phone == null ? null : String(data.phone),
+    is_active: Number(data.is_active ?? 1),
+    is_admin: Number(data.is_admin ?? 0),
+    avatar_initials: data.avatar_initials == null ? null : String(data.avatar_initials),
+    locale: data.locale === "fr" ? "fr" : "en",
+    theme: data.theme === "dark" ? "dark" : "light",
+    all_clients: Number(data.all_clients ?? 1),
+    created_at: (data.created_at as Date) ?? new Date(),
   };
 }
 

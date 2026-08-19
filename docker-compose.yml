@@ -5,14 +5,14 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-frx}
       POSTGRES_USER: ${POSTGRES_USER:-frx}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-frx}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-frx-change-me}
     volumes:
       - frx_pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-frx} -d ${POSTGRES_DB:-frx}"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 5s
-      retries: 12
+      retries: 20
 
   app:
     build: .
@@ -28,8 +28,10 @@ services:
     environment:
       NODE_ENV: production
       PORT: "3000"
-      DATABASE_URL: ${DATABASE_URL:-postgres://frx:frx@db:5432/frx}
+      POSTGRES_DB: ${POSTGRES_DB:-frx}
+      POSTGRES_USER: ${POSTGRES_USER:-frx}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-frx-change-me}
+      DATABASE_URL: postgres://${POSTGRES_USER:-frx}:${POSTGRES_PASSWORD:-frx-change-me}@db:5432/${POSTGRES_DB:-frx}
 
 volumes:
   frx_pgdata:
-
