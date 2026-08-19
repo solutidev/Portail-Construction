@@ -171,12 +171,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return null;
       }
       await dbReady;
-      const rows = await db.select().from(schema.users).where(eq(schema.users.email, email.trim().toLowerCase()));
+      const rows = await db.select().from(schema.users).where(eq(schema.users.email, cleanEmail.toLowerCase()));
       const fallback = rows.length
         ? rows
-        : await db.select().from(schema.users).where(eq(schema.users.email, email.trim()));
-      const match = fallback.find((u) => u.email.toLowerCase() === email.trim().toLowerCase());
-      if (!match || match.password !== password) return "login.error.invalid";
+        : await db.select().from(schema.users).where(eq(schema.users.email, cleanEmail));
+      const match = fallback.find((u) => u.email.toLowerCase() === cleanEmail.toLowerCase());
+      if (!match || match.password !== cleanPassword) return "login.error.invalid";
       if (!match.is_active) return "login.error.inactive";
       const session = toSession(match);
       setRealUser(session);

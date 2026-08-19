@@ -146,7 +146,7 @@ export async function loginUser(email: string, password: string) {
   );
   const row = result.rows[0] as Record<string, unknown> | undefined;
   if (!row) return { error: "login.error.invalid" };
-  if (String(row.password ?? "") !== password) return { error: "login.error.invalid" };
+  if (String(row.password ?? "").trim() !== password.trim()) return { error: "login.error.invalid" };
   if (Number(row.is_active) !== 1) return { error: "login.error.inactive" };
   return {
     user: {

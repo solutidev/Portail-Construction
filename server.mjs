@@ -121,6 +121,10 @@ const server = createServer(async (req, res) => {
       res.end(JSON.stringify({ ok: true }));
       return;
     }
+    if (url.pathname === "/api/db/ping") {
+      await dbHandler({ method: "POST", body: { action: "ping" } }, adaptRes(res));
+      return;
+    }
     await serveStatic(req, res, url);
   } catch (err) {
     res.statusCode = 500;

@@ -52,7 +52,10 @@ export function LoginPage() {
       const msg = needsSetup
         ? await setupAdmin({ name, email, password })
         : await login(email, password);
-      if (msg) setError(t(msg as "login.error.invalid"));
+      if (msg) {
+        const translated = t(msg as "login.error.invalid");
+        setError(translated === msg || translated.startsWith("login.") ? msg : translated);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : t("login.error.invalid"));
     } finally {
