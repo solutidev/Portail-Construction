@@ -264,6 +264,9 @@ function StaffNav({ onNavigate }: { onNavigate?: () => void }) {
         {t("nav.dashboard")}
       </NavLink>
       <NavLink to="/documents" end onClick={onNavigate} className={({ isActive }) => linkClass(isActive)}>
+        <FileText className="size-4 shrink-0 opacity-80" />
+        {t("nav.documents")}
+      </NavLink>
 
       <NavSection
         id="operations"
