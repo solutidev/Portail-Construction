@@ -151,23 +151,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [loadPermissions, applyPrefs]);
 
   const login = useCallback(async (email: string, password: string) => {
+    const cleanEmail = email.trim();
+    const cleanPassword = password.trim();
     try {
       if (import.meta.env.PROD) {
         const res = await fetch("/api/db", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "login", email, password }),
+          body: JSON.stringify({ action: "login", email: cleanEmail, password: cleanPassword }),
         });
-        const data = await res.json();
-        if (!res.ok) return "login.error.invalid";
-        if (data.error) return data.error as string;
-        const session = toSession(data.user);
+        let data: Record<string, unknown> = {};
+        try {
+          data = (await res.json()) as Record<string, unknown>;
+        } catch {
+          return `Database error (${res.status})`;
+        }
+        if (!res.ok) return String(data.error || `Database error (${res.status})`);
+        if (data.error) return String(data.error);
+        const rawUser = data.user as Record<string, unknown> | undefined;
+        if (!rawUser?.id) return "login.error.invalid";
+        const session = toSession(rawUser);
         setRealUser(session);
         setViewAsState("admin");
         localStorage.removeItem(VIEW_AS_KEY);
         applyPrefs(session);
         localStorage.setItem(SESSION_KEY, String(session.id));
-        await loadPermissions(session.id, "admin", Boolean(session.is_admin));
+        try {
+          await loadPermissions(session.id, "admin", Boolean(session.is_admin));
+        } catch (err) {
+          console.error("permissions after login failed", err);
+        }
         return null;
       }
       await dbReady;
@@ -188,7 +201,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return null;
     } catch (err) {
       console.error("login failed", err);
-      return "login.error.invalid";
+      return err instanceof Error ? err.message : "login.error.invalid";
     }
   }, [loadPermissions, applyPrefs]);
 
