@@ -168,11 +168,7 @@ async function seedIfEmptyInner() {
   const existing = await db.select().from(schema.users).limit(1);
   if (existing.length > 0) {
     await ensureDefaultGroups();
-    if (!isProductionBuild()) await seedBillingIfEmpty();
-    return;
-  }
-  if (isProductionBuild()) {
-    await ensureDefaultGroups();
+    await seedBillingIfEmpty();
     return;
   }
 
