@@ -1,8 +1,26 @@
 services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-frx}
+      POSTGRES_USER: ${POSTGRES_USER:-frx}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-frx}
+    volumes:
+      - frx_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-frx} -d ${POSTGRES_DB:-frx}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
   app:
     build: .
     image: frx-portal:latest
     restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
     ports:
       - "${PORT:-8080}:3000"
     env_file:
@@ -10,5 +28,8 @@ services:
     environment:
       NODE_ENV: production
       PORT: "3000"
-    # App data lives in each user's browser (IndexedDB). Rebuilding this
-    # container updates the app only — it never wipes project or user data.
+      DATABASE_URL: ${DATABASE_URL:-postgres://frx:frx@db:5432/frx}
+
+volumes:
+  frx_pgdata:
+

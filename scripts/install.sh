@@ -30,5 +30,5 @@ fi
 sudo docker compose up -d --build
 echo
 echo "Installed. Open http://<server>:${PORT:-8080}"
-echo "First visit: create the administrator account."
+echo "First visit: create the administrator account (stored in Postgres)."
 echo "Later updates:  sudo bash $INSTALL_DIR/scripts/update.sh"

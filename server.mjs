@@ -5,6 +5,7 @@ import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import sharepointHandler from "./api/sharepoint.ts";
 import mailHandler from "./api/mail/send.ts";
+import dbHandler from "./api/db.ts";
 
 const root = fileURLToPath(new URL(".", import.meta.url));
 const dist = join(root, "dist");
@@ -108,6 +109,11 @@ const server = createServer(async (req, res) => {
     if (url.pathname === "/api/mail/send") {
       const body = req.method === "POST" ? await readJsonBody(req) : {};
       await mailHandler({ method: req.method, body }, adaptRes(res));
+      return;
+    }
+    if (url.pathname === "/api/db") {
+      const body = req.method === "POST" ? await readJsonBody(req) : {};
+      await dbHandler({ method: req.method, body }, adaptRes(res));
       return;
     }
     if (url.pathname === "/healthz") {

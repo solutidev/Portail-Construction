@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Pull the latest GitHub commit and rebuild the app container.
-# Existing browser data (users, projects, documents ACLs) is not deleted.
+# Postgres data in the frx_pgdata volume is not deleted.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -17,9 +17,9 @@ git fetch origin "$BRANCH"
 git checkout "$BRANCH"
 git pull --ff-only origin "$BRANCH"
 
-echo "Rebuilding app image (data is not in this image)…"
+echo "Rebuilding app image (Postgres volume is kept)…"
 docker compose up -d --build --remove-orphans
 
 echo
 echo "Updated to $(git rev-parse --short HEAD)."
-echo "Ask users to refresh the browser. Their data stays on this machine."
+echo "Ask users to refresh the browser. Shared data stays in Postgres."

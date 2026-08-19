@@ -14,6 +14,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/api ./api
+COPY --from=build /app/src/db ./src/db
 COPY --from=build /app/server.mjs ./server.mjs
 EXPOSE 3000
 CMD ["node", "--import", "tsx", "server.mjs"]
