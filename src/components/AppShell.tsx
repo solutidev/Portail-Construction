@@ -16,7 +16,6 @@ import {
   Moon,
   Shield,
   Settings,
-  Share2,
   Sun,
   Timer,
   Users,
@@ -265,15 +264,6 @@ function StaffNav({ onNavigate }: { onNavigate?: () => void }) {
         {t("nav.dashboard")}
       </NavLink>
       <NavLink to="/documents" end onClick={onNavigate} className={({ isActive }) => linkClass(isActive)}>
-        <FileText className="size-4 shrink-0 opacity-80" />
-        {t("nav.documents")}
-      </NavLink>
-      {user?.is_admin || (user?.user_type === "internal" && user.view_as !== "client") ? (
-        <NavLink to="/documents?tab=access" onClick={onNavigate} className={({ isActive }) => linkClass(isActive)}>
-          <Share2 className="size-4 shrink-0 opacity-80" />
-          {t("sp.manageAccess")}
-        </NavLink>
-      ) : null}
 
       <NavSection
         id="operations"
