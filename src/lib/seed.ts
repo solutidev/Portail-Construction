@@ -158,136 +158,140 @@ export async function createFirstAdmin(input: { name: string; email: string; pas
   return null;
 }
 
+async function upsertUser(values: {
+  name: string;
+  email: string;
+  password: string;
+  user_type: "internal" | "external";
+  title: string;
+  phone: string;
+  is_admin: number;
+  locale: "en" | "fr";
+  all_clients?: number;
+}) {
+  const email = values.email.toLowerCase();
+  const found = await db.select().from(schema.users).where(eq(schema.users.email, email));
+  if (found[0]) {
+    await db
+      .update(schema.users)
+      .set({
+        password: values.password,
+        is_active: 1,
+        is_admin: values.is_admin,
+        name: values.name,
+        user_type: values.user_type,
+      })
+      .where(eq(schema.users.id, found[0].id));
+    return found[0];
+  }
+  const [row] = await db
+    .insert(schema.users)
+    .values({
+      name: values.name,
+      email,
+      password: values.password,
+      user_type: values.user_type,
+      title: values.title,
+      phone: values.phone,
+      is_active: 1,
+      is_admin: values.is_admin,
+      avatar_initials: initials(values.name),
+      locale: values.locale,
+      theme: "light",
+      all_clients: values.all_clients ?? (values.user_type === "internal" ? 1 : 0),
+    })
+    .returning();
+  return row;
+}
+
 async function seedIfEmptyInner() {
   await dbReady;
   await migrateLegacyBrand();
-  const existing = await db.select().from(schema.users).limit(1);
-  if (existing.length > 0) {
+  const existingClients = await db.select().from(schema.clients).limit(1);
+  if (existingClients.length > 0) {
     await ensureDefaultGroups();
     await seedBillingIfEmpty();
     return;
   }
 
-  const [admin] = await db
-    .insert(schema.users)
-    .values({
-      name: "Camille Bouchard",
-      email: "admin@frxconstruction.ca",
-      password: "admin123",
-      user_type: "internal",
-      title: "Director of Operations",
-      phone: "450-555-0100",
-      is_active: 1,
-      is_admin: 1,
-      avatar_initials: initials("Camille Bouchard"),
-      locale: "en",
-      theme: "light",
-      all_clients: 1,
-    })
-    .returning();
+  const admin = await upsertUser({
+    name: "Camille Bouchard",
+    email: "admin@frxconstruction.ca",
+    password: "admin123",
+    user_type: "internal",
+    title: "Director of Operations",
+    phone: "450-555-0100",
+    is_admin: 1,
+    locale: "en",
+    all_clients: 1,
+  });
 
-  const [pm] = await db
-    .insert(schema.users)
-    .values({
-      name: "Marc Tremblay",
-      email: "marc@frxconstruction.ca",
-      password: "frx123",
-      user_type: "internal",
-      title: "Senior Project Manager",
-      phone: "514-555-0142",
-      is_active: 1,
-      is_admin: 0,
-      avatar_initials: initials("Marc Tremblay"),
-      locale: "fr",
-      theme: "light",
-    })
-    .returning();
+  const pm = await upsertUser({
+    name: "Marc Tremblay",
+    email: "marc@frxconstruction.ca",
+    password: "frx123",
+    user_type: "internal",
+    title: "Senior Project Manager",
+    phone: "514-555-0142",
+    is_admin: 0,
+    locale: "fr",
+  });
 
-  const [superint] = await db
-    .insert(schema.users)
-    .values({
-      name: "Léa Gagnon",
-      email: "lea@frxconstruction.ca",
-      password: "frx123",
-      user_type: "internal",
-      title: "Superintendent",
-      phone: "438-555-0198",
-      is_active: 1,
-      is_admin: 0,
-      avatar_initials: initials("Léa Gagnon"),
-      locale: "fr",
-      theme: "light",
-    })
-    .returning();
+  const superint = await upsertUser({
+    name: "Léa Gagnon",
+    email: "lea@frxconstruction.ca",
+    password: "frx123",
+    user_type: "internal",
+    title: "Superintendent",
+    phone: "438-555-0198",
+    is_admin: 0,
+    locale: "fr",
+  });
 
-  const [safety] = await db
-    .insert(schema.users)
-    .values({
-      name: "Noah Patel",
-      email: "noah@frxconstruction.ca",
-      password: "frx123",
-      user_type: "internal",
-      title: "Safety Officer",
-      phone: "450-555-0176",
-      is_active: 1,
-      is_admin: 0,
-      avatar_initials: initials("Noah Patel"),
-      locale: "en",
-      theme: "light",
-    })
-    .returning();
+  const safety = await upsertUser({
+    name: "Noah Patel",
+    email: "noah@frxconstruction.ca",
+    password: "frx123",
+    user_type: "internal",
+    title: "Safety Officer",
+    phone: "450-555-0176",
+    is_admin: 0,
+    locale: "en",
+  });
 
-  const [clientOwner] = await db
-    .insert(schema.users)
-    .values({
-      name: "Sophie Lavoie",
-      email: "sophie@nordique.com",
-      password: "client123",
-      user_type: "external",
-      title: "VP Real Estate",
-      phone: "514-555-2201",
-      is_active: 1,
-      is_admin: 0,
-      avatar_initials: initials("Sophie Lavoie"),
-      locale: "fr",
-      theme: "light",
-      all_clients: 0,
-    })
-    .returning();
+  const clientOwner = await upsertUser({
+    name: "Sophie Lavoie",
+    email: "sophie@nordique.com",
+    password: "client123",
+    user_type: "external",
+    title: "VP Real Estate",
+    phone: "514-555-2201",
+    is_admin: 0,
+    locale: "fr",
+    all_clients: 0,
+  });
 
-  const [clientPm] = await db
-    .insert(schema.users)
-    .values({
-      name: "Julien Roy",
-      email: "julien@nordique.com",
-      password: "client123",
-      user_type: "external",
-      title: "Owner's Representative",
-      phone: "514-555-2208",
-      is_active: 1,
-      is_admin: 0,
-      avatar_initials: initials("Julien Roy"),
-      locale: "fr",
-      theme: "light",
-    })
-    .returning();
+  const clientPm = await upsertUser({
+    name: "Julien Roy",
+    email: "julien@nordique.com",
+    password: "client123",
+    user_type: "external",
+    title: "Owner's Representative",
+    phone: "514-555-2208",
+    is_admin: 0,
+    locale: "fr",
+  });
 
-  const [harbourOwner] = await db
-    .insert(schema.users)
-    .values({
-      name: "Amelia Chen",
-      email: "amelia@harbourdev.ca",
-      password: "client123",
-      user_type: "external",
-      title: "Development Director",
-      phone: "416-555-3310",
-      is_active: 1,
-      is_admin: 0,
-      avatar_initials: initials("Amelia Chen"),
-      locale: "en",
-      theme: "light",
-    })
-    .returning();
+  const harbourOwner = await upsertUser({
+    name: "Amelia Chen",
+    email: "amelia@harbourdev.ca",
+    password: "client123",
+    user_type: "external",
+    title: "Development Director",
+    phone: "416-555-3310",
+    is_admin: 0,
+    locale: "en",
+  });
 
   const [nordique] = await db
     .insert(schema.clients)

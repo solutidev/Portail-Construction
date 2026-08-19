@@ -121,6 +121,105 @@ async function ensureDemoUsers() {
     );
   }
   demoReady = true;
+  await ensureDemoCatalog();
+}
+
+async function ensureDemoCatalog() {
+  const clients = await getPool().query("SELECT count(*)::int AS n FROM clients");
+  if ((clients.rows[0]?.n ?? 0) > 0) return;
+
+  const admin = await getPool().query("SELECT id FROM users WHERE lower(email)='admin@frxconstruction.ca'");
+  const pm = await getPool().query("SELECT id FROM users WHERE lower(email)='marc@frxconstruction.ca'");
+  const sophie = await getPool().query("SELECT id FROM users WHERE lower(email)='sophie@nordique.com'");
+  const adminId = admin.rows[0]?.id ?? 1;
+  const pmId = pm.rows[0]?.id ?? adminId;
+  const sophieId = sophie.rows[0]?.id ?? adminId;
+
+  const nordique = await getPool().query(
+    `INSERT INTO clients (name, company_name, email, phone, address, city, state, zip, notes, status)
+     VALUES ('Sophie Lavoie', 'Nordique Immobilier', 'projects@nordique.com', '514-555-2200', '1200 Boulevard René-Lévesque O', 'Montréal', 'QC', 'H3B 4W8', 'Long-term commercial client.', 'active')
+     RETURNING id`,
+  );
+  const harbour = await getPool().query(
+    `INSERT INTO clients (name, company_name, email, phone, address, city, state, zip, notes, status)
+     VALUES ('Amelia Chen', 'Harbour Development', 'build@harbourdev.ca', '416-555-3300', '88 Queens Quay W', 'Toronto', 'ON', 'M5J 0B8', 'Waterfront mixed-use portfolio.', 'active')
+     RETURNING id`,
+  );
+  await getPool().query(
+    `INSERT INTO clients (name, company_name, email, phone, address, city, state, zip, notes, status)
+     VALUES ('École Saint-Laurent', 'Commission scolaire de Montréal', 'travaux@csdm.qc.ca', '514-555-4400', '3737 Rue Sherbrooke E', 'Montréal', 'QC', 'H1X 3B3', 'Public-sector prospect.', 'prospect')`,
+  );
+  const nordiqueId = nordique.rows[0].id;
+  const harbourId = harbour.rows[0].id;
+
+  const plaza = await getPool().query(
+    `INSERT INTO projects (client_id, name, project_number, description, status, phase, project_type, address, city, start_date, end_date, budget, spent, sort_order, require_geofence)
+     VALUES ($1, 'Plaza Saint-Laurent', 'FOR-2408', 'Six-storey mixed-use podium with ground-floor retail.', 'active', 'structure', 'Mixed-use', '2150 Rue Saint-Laurent', 'Montréal', CURRENT_DATE - 120, CURRENT_DATE + 240, 18400000, 7420000, 0, 0)
+     RETURNING id`,
+    [nordiqueId],
+  );
+  const warehouse = await getPool().query(
+    `INSERT INTO projects (client_id, name, project_number, description, status, phase, project_type, address, city, start_date, end_date, budget, spent, sort_order, require_geofence)
+     VALUES ($1, 'Anjou Cold Storage', 'FOR-2412', 'Refrigerated distribution facility.', 'planning', 'preconstruction', 'Industrial', '8900 Boulevard Métropolitain E', 'Anjou', CURRENT_DATE + 30, CURRENT_DATE + 320, 9600000, 410000, 0, 0)
+     RETURNING id`,
+    [nordiqueId],
+  );
+  const quay = await getPool().query(
+    `INSERT INTO projects (client_id, name, project_number, description, status, phase, project_type, address, city, start_date, end_date, budget, spent, sort_order, require_geofence)
+     VALUES ($1, 'Quay 12 Residences', 'FOR-2319', 'Waterfront condominium tower, 22 storeys.', 'active', 'envelope', 'Residential', '12 Harbour Street', 'Toronto', CURRENT_DATE - 280, CURRENT_DATE + 160, 42800000, 27100000, 0, 0)
+     RETURNING id`,
+    [harbourId],
+  );
+  const plazaId = plaza.rows[0].id;
+  const warehouseId = warehouse.rows[0].id;
+  const quayId = quay.rows[0].id;
+
+  await getPool().query(
+    `INSERT INTO client_users (client_id, user_id, is_primary) VALUES ($1, $2, 1)`,
+    [nordiqueId, sophieId],
+  );
+  await getPool().query(
+    `INSERT INTO project_members (project_id, user_id, role) VALUES
+      ($1, $2, 'Project Manager'), ($3, $2, 'Project Manager'), ($4, $2, 'Project Manager'),
+      ($1, $5, 'Client Contact')`,
+    [plazaId, pmId, warehouseId, quayId, sophieId],
+  );
+  await getPool().query(
+    `INSERT INTO project_tasks (project_id, title, description, start_date, end_date, status, priority, assigned_to)
+     VALUES
+      ($1, 'Level 4 slab pour', 'Coordinate pump and rebar inspection.', CURRENT_DATE - 4, CURRENT_DATE + 2, 'in_progress', 'high', $2),
+      ($1, 'MEP rough-in — podium', 'Electrical and mechanical sleeves.', CURRENT_DATE + 3, CURRENT_DATE + 28, 'not_started', 'medium', $2),
+      ($3, 'Curtain wall levels 8–12', 'Unitized panels arriving Tuesday.', CURRENT_DATE - 2, CURRENT_DATE + 18, 'in_progress', 'high', $2)`,
+    [plazaId, pmId, quayId],
+  );
+  await getPool().query(
+    `INSERT INTO budget_items (project_id, category, description, estimated, actual, status) VALUES
+      ($1, 'Concrete', 'Foundations, podium, cores', 4100000, 2680000, 'invoiced'),
+      ($1, 'MEP', 'Mechanical, electrical, plumbing', 3200000, 610000, 'planned'),
+      ($2, 'Envelope', 'Unitized curtain wall', 6400000, 4120000, 'committed')`,
+    [plazaId, quayId],
+  );
+  await getPool().query(
+    `INSERT INTO rfis (project_id, number, title, description, status, assigned_to, due_date) VALUES
+      ($1, 'RFI-042', 'Transfer slab sleeve conflict', 'Mechanical sleeve clashes with tendon profile.', 'open', $2, CURRENT_DATE + 4)`,
+    [plazaId, pmId],
+  );
+  await getPool().query(
+    `INSERT INTO change_orders (project_id, number, title, description, amount, status) VALUES
+      ($1, 'CO-008', 'Upgrade retail storefront', 'Owner-directed upgrade on three bays.', 186400, 'submitted')`,
+    [plazaId],
+  );
+  await getPool().query(
+    `INSERT INTO daily_logs (project_id, log_date, weather, crew_count, notes, created_by) VALUES
+      ($1, CURRENT_DATE - 1, 'Clear, 11°C', 42, 'Formwork for L4 slab complete.', $2)`,
+    [plazaId, pmId],
+  );
+  await getPool().query(
+    `INSERT INTO activities (project_id, client_id, user_id, action, details) VALUES
+      ($1, $2, $3, 'updated budget', 'Committed steel package'),
+      ($1, $2, $4, 'opened project', 'Plaza Saint-Laurent')`,
+    [plazaId, nordiqueId, pmId, adminId],
+  );
 }
 
 export async function runSql(sql: string, params: unknown[] = []) {
