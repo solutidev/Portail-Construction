@@ -242,6 +242,11 @@ export const fr: Record<MessageKey, string> = {
   "config.clients.users": "Utilisateurs client",
   "config.clients.edit": "Modifier le client",
   "config.clients.save": "Enregistrer le client",
+  "config.clients.delete": "Supprimer",
+  "config.clients.deleteTitle": "Supprimer ce client ?",
+  "config.clients.deleteDesc":
+    "Cela retire définitivement {name}, tous ses projets, et les utilisateurs clients liés uniquement à cette entreprise.",
+  "config.clients.deleteConfirm": "Supprimer le client",
   "config.clients.tab.companies": "Entreprises",
   "config.clients.tab.groups": "Groupes clients",
   "config.internal.title": "Utilisateurs/groupes",

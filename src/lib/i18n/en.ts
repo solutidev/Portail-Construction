@@ -240,6 +240,11 @@ export const en = {
   "config.clients.users": "Client users",
   "config.clients.edit": "Edit client",
   "config.clients.save": "Save client",
+  "config.clients.delete": "Delete",
+  "config.clients.deleteTitle": "Delete this client?",
+  "config.clients.deleteDesc":
+    "This permanently removes {name}, every project under it, and client users who belong only to this company.",
+  "config.clients.deleteConfirm": "Delete client",
   "config.clients.tab.companies": "Companies",
   "config.clients.tab.groups": "Client groups",
   "config.internal.title": "Users/groups",

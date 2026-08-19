@@ -1,10 +1,12 @@
 import { FormEvent, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { eq } from "drizzle-orm";
-import { Building2, Pencil, Plus, Search } from "lucide-react";
+import { Building2, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { db, dbReady, schema } from "../../db";
 import { useAuth } from "@/lib/auth";
 import { logActivity } from "@/lib/activity";
+import { deleteClientCascade } from "@/lib/delete-client";
+import { useWorkspace } from "@/lib/workspace";
 import { initials } from "@/lib/format";
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
@@ -62,6 +64,7 @@ const emptyUser = {
 
 export function ConfigClientsPage({ embedded = false }: { embedded?: boolean }) {
   const { user } = useAuth();
+  const { refresh } = useWorkspace();
   const { t } = useI18n();
   const [loading, setLoading] = useState(true);
   const [clients, setClients] = useState<Client[]>([]);
@@ -74,6 +77,7 @@ export function ConfigClientsPage({ embedded = false }: { embedded?: boolean }) 
   const [editing, setEditing] = useState<Client | null>(null);
   const [form, setForm] = useState(emptyClient);
   const [inviteFor, setInviteFor] = useState<Client | null>(null);
+  const [deleting, setDeleting] = useState<Client | null>(null);
   const [userForm, setUserForm] = useState(emptyUser);
   const [saving, setSaving] = useState(false);
 
@@ -205,6 +209,24 @@ export function ConfigClientsPage({ embedded = false }: { embedded?: boolean }) 
     await load();
   }
 
+  async function onDeleteClient() {
+    if (!deleting) return;
+    setSaving(true);
+    try {
+      await deleteClientCascade(deleting.id);
+      await logActivity({
+        action: "deleted client",
+        details: deleting.company_name,
+        userId: user?.id,
+      });
+      setDeleting(null);
+      await load();
+      await refresh();
+    } finally {
+      setSaving(false);
+    }
+  }
+
   if (loading) return <PageSkeleton />;
   if (!user?.is_admin) {
     return (
@@ -310,6 +332,10 @@ export function ConfigClientsPage({ embedded = false }: { embedded?: boolean }) 
                     <Button variant="outline" size="sm" onClick={() => openEdit(c)}>
                       <Pencil className="size-3.5" />
                       {t("config.clients.edit")}
+                    </Button>
+                    <Button variant="outline" size="sm" className="text-destructive" onClick={() => setDeleting(c)}>
+                      <Trash2 className="size-3.5" />
+                      {t("config.clients.delete")}
                     </Button>
                   </div>
                 </div>
@@ -437,6 +463,30 @@ export function ConfigClientsPage({ embedded = false }: { embedded?: boolean }) 
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(deleting)}
+        onOpenChange={(o) => {
+          if (!o) setDeleting(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t("config.clients.deleteTitle")}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {t("config.clients.deleteDesc", { name: deleting?.company_name ?? "" })}
+          </p>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setDeleting(null)}>
+              {t("clients.cancel")}
+            </Button>
+            <Button type="button" variant="destructive" disabled={saving} onClick={() => void onDeleteClient()}>
+              {saving ? t("clients.saving") : t("config.clients.deleteConfirm")}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
