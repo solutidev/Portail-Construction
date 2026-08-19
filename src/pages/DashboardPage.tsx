@@ -37,6 +37,7 @@ export function DashboardPage() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      try {
       await dbReady;
       const allClients = (await db.select().from(schema.clients)) as Client[];
       const allProjects = (await db.select().from(schema.projects)) as Project[];
@@ -82,7 +83,11 @@ export function DashboardPage() {
         setOpenRfis(rfis);
         setOpenPunch(punch);
         setActivities(acts);
-        setLoading(false);
+      }
+      } catch (err) {
+        console.error("dashboard load failed", err);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     })();
     return () => {

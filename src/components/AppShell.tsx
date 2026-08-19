@@ -89,6 +89,7 @@ const CRUMB: Record<string, MessageKey> = {
   punch: "nav.punch",
   timesheets: "nav.timesheets",
   tools: "nav.tools",
+  documents: "nav.documents",
 };
 
 function linkClass(isActive: boolean) {

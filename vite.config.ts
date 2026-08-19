@@ -7,6 +7,7 @@ import { sharepointDevServer } from "./vite-plugins/sharepoint-dev-server";
 
 export default defineConfig({
   optimizeDeps: { exclude: ["@electric-sql/pglite"] },
+  worker: { format: "es" },
   plugins: [react(), tailwindcss(), mailDevServer(), sharepointDevServer()],
   resolve: {
     alias: { "@": path.resolve(__dirname, "./src") },

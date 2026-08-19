@@ -23,6 +23,7 @@ const MIME = {
   ".woff2": "font/woff2",
   ".map": "application/json",
   ".txt": "text/plain; charset=utf-8",
+  ".wasm": "application/wasm",
 };
 
 function adaptRes(res) {
