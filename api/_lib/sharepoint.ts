@@ -107,6 +107,17 @@ export async function createFolder(token: string, driveId: string, name: string,
   });
 }
 
+export async function renameItem(token: string, driveId: string, itemId: string, name: string) {
+  return graph<DriveItem>(token, `/drives/${driveId}/items/${itemId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ name }),
+  });
+}
+
+export async function deleteItem(token: string, driveId: string, itemId: string) {
+  await graph(token, `/drives/${driveId}/items/${itemId}`, { method: "DELETE" });
+}
+
 export async function uploadSmallFile(
   token: string,
   driveId: string,

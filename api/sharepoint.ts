@@ -1,10 +1,12 @@
 import {
   createFolder,
+  deleteItem,
   downloadFile,
   getGraphToken,
   listChildren,
   mergeSharePointConfig,
   officeEditUrl,
+  renameItem,
   resolveDrive,
   sharePointConfigured,
   uploadSmallFile,
@@ -88,7 +90,7 @@ export default async function handler(req: Req, res: Res) {
         })),
       });
     }
-    if (action === "mkdir") {
+    if (actionName === "mkdir" || action === "mkdir") {
       const name = String(body.name ?? "").trim();
       if (!name) return res.status(400).json({ error: "Folder name is required." });
       const folder = await createFolder(token, driveId, name, body.parentId ? String(body.parentId) : undefined);
@@ -96,6 +98,19 @@ export default async function handler(req: Req, res: Res) {
         driveId,
         folder: { id: folder.id, name: folder.name, webUrl: folder.webUrl ?? "" },
       });
+    }
+    if (actionName === "rename" || action === "rename") {
+      const itemId = String(body.itemId ?? "").trim();
+      const name = String(body.name ?? "").trim();
+      if (!itemId || !name) return res.status(400).json({ error: "itemId and name are required." });
+      const item = await renameItem(token, driveId, itemId, name);
+      return res.status(200).json({ item: { id: item.id, name: item.name } });
+    }
+    if (actionName === "delete" || action === "delete") {
+      const itemId = String(body.itemId ?? "").trim();
+      if (!itemId) return res.status(400).json({ error: "itemId is required." });
+      await deleteItem(token, driveId, itemId);
+      return res.status(200).json({ ok: true });
     }
     if (action === "upload") {
       const name = String(body.name ?? "").trim();

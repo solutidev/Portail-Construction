@@ -1,5 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronRight, Download, FileText, FolderPlus, Share2, Upload } from "lucide-react";
+import {
+  ChevronRight,
+  Download,
+  FileText,
+  FolderOpen,
+  FolderPlus,
+  Home,
+  MoreHorizontal,
+  Pencil,
+  Share2,
+  Trash2,
+  Upload,
+} from "lucide-react";
+import { eq } from "drizzle-orm";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { useWorkspace } from "@/lib/workspace";
@@ -33,6 +46,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type BrowseFolder = SharePointFolder | { id: 0; name: string; sp_item_id: string; sp_drive_id: string; path: string };
 
@@ -62,8 +81,13 @@ export function SharePointLibrary({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
+  const [folderQuery, setFolderQuery] = useState("");
+  const [clientQuery, setClientQuery] = useState("");
   const [shareOpen, setShareOpen] = useState(false);
   const [shareTarget, setShareTarget] = useState<{ folderId: number; itemId: string; name: string } | null>(null);
+  const [renameTarget, setRenameTarget] = useState<BrowseFolder | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<BrowseFolder | null>(null);
 
   const libraryRoot: BrowseFolder | null = settings
     ? {
@@ -82,16 +106,44 @@ export function SharePointLibrary({
   const showRootForClient = Boolean(libraryRoot && clientHasRootShare(shares, client?.id ?? null));
   const navFolders: BrowseFolder[] =
     manager && libraryRoot ? [libraryRoot, ...visible] : showRootForClient && libraryRoot ? [libraryRoot, ...visible] : visible;
+  const filteredNav = useMemo(() => {
+    const q = folderQuery.trim().toLowerCase();
+    if (!q) return navFolders;
+    return navFolders.filter((folder) => folder.name.toLowerCase().includes(q) || folder.path.toLowerCase().includes(q));
+  }, [navFolders, folderQuery]);
   const active = navFolders.find((f) => f.id === activeId) ?? navFolders[0] ?? null;
   const folderShare = active && active.id && client ? shareFor(shares, active.id, client.id, "") : null;
   const canUpload = Boolean(manager || (canCreate && folderShare?.can_upload && active && active.id !== 0));
   const canEditFolder = Boolean(manager || folderShare?.can_edit);
+  const crumbs: { label: string; folder: BrowseFolder | null }[] = (() => {
+    if (!active) return [];
+    if (active.id === 0) return [{ label: active.name, folder: active }];
+    const parts = active.path.split("/").filter(Boolean);
+    const trail: { label: string; folder: BrowseFolder | null }[] = [];
+    if (libraryRoot) trail.push({ label: t("sp.crumbRoot"), folder: libraryRoot });
+    let acc = "";
+    parts.forEach((part, index) => {
+      acc = acc ? `${acc}/${part}` : part;
+      const match = folders.find((f) => f.path === acc || f.name === part);
+      trail.push({
+        label: part,
+        folder: index === parts.length - 1 ? active : match ?? null,
+      });
+    });
+    return trail;
+  })();
 
   const visibleItems = useMemo(() => {
     if (!active) return [];
     if (manager || active.id === 0) return items;
     return items.filter((item) => itemVisibleTo(shares, active.id, item.id, user, client?.id ?? null));
   }, [items, active, manager, shares, user, client]);
+
+  const filteredClients = useMemo(() => {
+    const q = clientQuery.trim().toLowerCase();
+    if (!q) return clients;
+    return clients.filter((c) => c.company_name.toLowerCase().includes(q) || c.name.toLowerCase().includes(q));
+  }, [clients, clientQuery]);
 
   async function reloadMeta() {
     const nextFolders = projectId === 0 ? await loadAllFolders() : await loadProjectFolders(projectId);
@@ -152,12 +204,13 @@ export function SharePointLibrary({
         name: newName.trim(),
         parentId: active && active.id !== 0 ? active.sp_item_id : undefined,
       });
+      const parentPath = active && active.id !== 0 ? active.path.replace(/^\//, "") : "";
       await db.insert(schema.sharepoint_folders).values({
         project_id: projectId,
         name: created.folder.name,
         sp_item_id: created.folder.id,
         sp_drive_id: created.driveId,
-        path: created.folder.name,
+        path: parentPath ? `${parentPath}/${created.folder.name}` : created.folder.name,
       });
       setNewName("");
       const { nextFolders } = await reloadMeta();
@@ -165,6 +218,54 @@ export function SharePointLibrary({
       if (just) setActiveId(just.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create folder");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function renameFolder() {
+    if (!renameTarget || renameTarget.id === 0 || !renameValue.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await callSharePoint("rename", {
+        driveId: renameTarget.sp_drive_id,
+        itemId: renameTarget.sp_item_id,
+        name: renameValue.trim(),
+      });
+      await db
+        .update(schema.sharepoint_folders)
+        .set({
+          name: renameValue.trim(),
+          path: renameTarget.path.replace(/[^/]+$/, renameValue.trim()),
+        })
+        .where(eq(schema.sharepoint_folders.id, renameTarget.id));
+      setRenameTarget(null);
+      await reloadMeta();
+      if (active) await loadItems(active);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not rename folder");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteFolder() {
+    if (!deleteTarget || deleteTarget.id === 0) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await callSharePoint("delete", {
+        driveId: deleteTarget.sp_drive_id,
+        itemId: deleteTarget.sp_item_id,
+      });
+      await db.delete(schema.sharepoint_shares).where(eq(schema.sharepoint_shares.folder_id, deleteTarget.id));
+      await db.delete(schema.sharepoint_folders).where(eq(schema.sharepoint_folders.id, deleteTarget.id));
+      setDeleteTarget(null);
+      setActiveId(0);
+      await reloadMeta();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete folder");
     } finally {
       setBusy(false);
     }
@@ -236,7 +337,16 @@ export function SharePointLibrary({
       can_edit: key === "can_edit" ? on : Boolean(current?.can_edit),
     };
     if (next.can_upload || next.can_edit) next.can_view = true;
+    if (!on && key === "can_view") {
+      next.can_upload = false;
+      next.can_edit = false;
+    }
     await upsertShare(folderId, clientId, next, itemId);
+    setShares(await loadFolderShares(folders.map((f) => f.id)));
+  }
+
+  async function clearFlags(folderId: number, clientId: number, itemId: string) {
+    await upsertShare(folderId, clientId, { can_view: false, can_upload: false, can_edit: false }, itemId);
     setShares(await loadFolderShares(folders.map((f) => f.id)));
   }
 
@@ -256,26 +366,65 @@ export function SharePointLibrary({
   const accessFolderId = shareTarget?.folderId ?? active?.id ?? 0;
   const accessItemId = shareTarget?.itemId ?? "";
   const accessName = shareTarget?.name ?? active?.name ?? t("sp.wholeLibrary");
+  const sharedCount = clients.filter((c) => Boolean(shareFor(shares, accessFolderId, c.id, accessItemId)?.can_view)).length;
+
+  function folderActions(folder: BrowseFolder) {
+    if (!manager || folder.id === 0) return null;
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button size="icon-sm" variant="ghost" aria-label={t("sp.more")}>
+            <MoreHorizontal className="size-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem
+            onClick={() => {
+              setRenameTarget(folder);
+              setRenameValue(folder.name);
+            }}
+          >
+            <Pencil />
+            {t("sp.rename")}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => openShare(folder.id, "", folder.name)}>
+            <Share2 />
+            {t("sp.shareFolder")}
+          </DropdownMenuItem>
+          <DropdownMenuItem variant="destructive" onClick={() => setDeleteTarget(folder)}>
+            <Trash2 />
+            {t("sp.delete")}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  }
 
   return (
-    <div className={compact ? "space-y-3" : "grid gap-4 xl:grid-cols-[220px_minmax(0,1fr)_280px]"}>
+    <div className={compact ? "space-y-3" : "grid gap-4 xl:grid-cols-[260px_minmax(0,1fr)_300px]"}>
       <Card className="gap-3 p-4">
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{t("sp.folders")}</p>
-        {navFolders.length === 0 ? (
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{t("sp.folders")}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{t("sp.browseHint")}</p>
+        </div>
+        <Input value={folderQuery} onChange={(e) => setFolderQuery(e.target.value)} placeholder={t("sp.searchFolders")} />
+        {filteredNav.length === 0 ? (
           <p className="text-sm text-muted-foreground">{manager ? t("sp.noFoldersStaff") : t("sp.noFoldersClient")}</p>
         ) : (
-          <ul className="space-y-1">
-            {navFolders.map((folder) => (
-              <li key={folder.id}>
+          <ul className="max-h-[28rem] space-y-1 overflow-auto pr-1">
+            {filteredNav.map((folder) => (
+              <li key={`${folder.id}-${folder.sp_item_id}`} className="flex items-center gap-1">
                 <button
                   type="button"
                   onClick={() => setActiveId(folder.id)}
-                  className={`w-full truncate rounded-md px-2.5 py-1.5 text-left text-sm ${
+                  className={`flex min-w-0 flex-1 items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sm ${
                     active?.id === folder.id ? "bg-primary/12 font-medium text-foreground" : "hover:bg-muted"
                   }`}
                 >
-                  {folder.name}
+                  {folder.id === 0 ? <Home className="size-3.5 shrink-0 opacity-70" /> : <FolderOpen className="size-3.5 shrink-0 opacity-70" />}
+                  <span className="truncate">{folder.name}</span>
                 </button>
+                {folderActions(folder)}
               </li>
             ))}
           </ul>
@@ -292,12 +441,27 @@ export function SharePointLibrary({
       </Card>
 
       <div>
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <div>
+        <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+          <div className="min-w-0">
+            <nav className="mb-1 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+              {crumbs.map((crumb, index) => (
+                <span key={`${crumb.label}-${index}`} className="flex items-center gap-1">
+                  {index > 0 ? <ChevronRight className="size-3" /> : null}
+                  {crumb.folder ? (
+                    <button type="button" className="hover:text-foreground" onClick={() => setActiveId(crumb.folder!.id)}>
+                      {crumb.label}
+                    </button>
+                  ) : (
+                    <span>{crumb.label}</span>
+                  )}
+                </span>
+              ))}
+            </nav>
             <h2 className="font-display text-lg font-semibold tracking-tight">{active?.name ?? t("project.nav.documents")}</h2>
             <p className="text-xs text-muted-foreground">{t("sp.aclHint", { project: projectName })}</p>
           </div>
           <div className="flex flex-wrap gap-2">
+            {manager && active && active.id !== 0 ? folderActions(active) : null}
             {manager && active ? (
               <Button size="sm" variant="outline" onClick={() => openShare(active.id, "", active.name)}>
                 <Share2 className="size-4" />
@@ -335,13 +499,21 @@ export function SharePointLibrary({
               const canEdit = Boolean(manager || fileShare?.can_edit || canEditFolder);
               return (
                 <li key={item.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
-                  <div className="min-w-0 flex-1">
+                  <button
+                    type="button"
+                    className="min-w-0 flex-1 text-left"
+                    onClick={() => {
+                      if (!item.isFolder) return;
+                      const linked = folders.find((f) => f.sp_item_id === item.id);
+                      if (linked) setActiveId(linked.id);
+                    }}
+                  >
                     <p className="truncate font-medium">{item.name}</p>
                     <p className="text-xs text-muted-foreground">
                       {item.isFolder ? t("sp.folder") : `${Math.max(1, Math.round(item.size / 1024))} KB`}
                       {item.lastModified ? ` · ${formatDate(item.lastModified, locale)}` : ""}
                     </p>
-                  </div>
+                  </button>
                   <div className="flex flex-wrap gap-2">
                     {manager && !item.isFolder ? (
                       <Button size="sm" variant="outline" onClick={() => openShare(active.id, item.id, item.name)}>
@@ -358,6 +530,7 @@ export function SharePointLibrary({
                           if (linked) setActiveId(linked.id);
                         }}
                       >
+                        {t("sp.openFolder")}
                         <ChevronRight className="size-4" />
                       </Button>
                     ) : null}
@@ -388,19 +561,30 @@ export function SharePointLibrary({
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{t("sp.accessPanel")}</p>
             <p className="mt-1 text-sm font-medium">{accessName}</p>
             <p className="text-xs text-muted-foreground">
-              {accessItemId ? t("sp.accessThisFile") : t("sp.accessThisFolder")}
+              {accessItemId ? t("sp.accessThisFile") : t("sp.accessThisFolder")} · {t("sp.sharedWith", { n: sharedCount })}
             </p>
-            <p className="mt-2 text-xs text-muted-foreground">{t("sp.accessPanelHint")}</p>
           </div>
-          {clients.length === 0 ? (
+          <Input value={clientQuery} onChange={(e) => setClientQuery(e.target.value)} placeholder={t("sp.searchClients")} />
+          {filteredClients.length === 0 ? (
             <p className="text-sm text-muted-foreground">{t("sp.noClients")}</p>
           ) : (
             <ul className="max-h-[28rem] space-y-3 overflow-auto pr-1">
-              {clients.map((c) => {
+              {filteredClients.map((c) => {
                 const share = shareFor(shares, accessFolderId, c.id, accessItemId);
                 return (
                   <li key={c.id} className="rounded-lg border p-3">
-                    <p className="mb-2 truncate text-sm font-medium">{c.company_name}</p>
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <p className="truncate text-sm font-medium">{c.company_name}</p>
+                      {share?.can_view ? (
+                        <button
+                          type="button"
+                          className="text-[11px] text-muted-foreground hover:text-foreground"
+                          onClick={() => void clearFlags(accessFolderId, c.id, accessItemId)}
+                        >
+                          {t("sp.clearAccess")}
+                        </button>
+                      ) : null}
+                    </div>
                     <div className="grid gap-2">
                       {(
                         [
@@ -435,13 +619,12 @@ export function SharePointLibrary({
             <DialogTitle>{shareTarget?.itemId ? t("sp.shareFileTitle") : t("sp.shareTitle")}</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            {shareTarget?.name} — {t("sp.shareHint")}
+            {t("sp.sharingFor")} <span className="font-medium text-foreground">{shareTarget?.name}</span>
           </p>
+          <Input value={clientQuery} onChange={(e) => setClientQuery(e.target.value)} placeholder={t("sp.searchClients")} />
           <ul className="max-h-80 space-y-3 overflow-auto">
-            {clients.map((c) => {
-              const share = shareTarget
-                ? shareFor(shares, shareTarget.folderId, c.id, shareTarget.itemId)
-                : null;
+            {filteredClients.map((c) => {
+              const share = shareTarget ? shareFor(shares, shareTarget.folderId, c.id, shareTarget.itemId) : null;
               return (
                 <li key={c.id} className="rounded-lg border p-3">
                   <p className="mb-2 text-sm font-medium">{c.company_name}</p>
@@ -472,6 +655,41 @@ export function SharePointLibrary({
           </ul>
           <DialogFooter>
             <Button onClick={() => setShareOpen(false)}>{t("project.save")}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(renameTarget)} onOpenChange={(open) => !open && setRenameTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t("sp.renameTitle")}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">{t("sp.renameHint")}</p>
+          <Input value={renameValue} onChange={(e) => setRenameValue(e.target.value)} />
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setRenameTarget(null)}>
+              {t("clients.cancel")}
+            </Button>
+            <Button type="button" disabled={busy || !renameValue.trim()} onClick={() => void renameFolder()}>
+              {t("sp.rename")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(deleteTarget)} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t("sp.deleteTitle")}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">{t("sp.deleteHint", { name: deleteTarget?.name ?? "" })}</p>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setDeleteTarget(null)}>
+              {t("clients.cancel")}
+            </Button>
+            <Button type="button" variant="destructive" disabled={busy} onClick={() => void deleteFolder()}>
+              {t("sp.deleteConfirm")}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
