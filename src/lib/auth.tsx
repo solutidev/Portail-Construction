@@ -144,12 +144,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (email: string, password: string) => {
     try {
+      if (import.meta.env.PROD) {
+        const res = await fetch("/api/db", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "login", email, password }),
+        });
+        const data = await res.json();
+        if (!res.ok) return "login.error.invalid";
+        if (data.error) return data.error as string;
+        const session = toSession(data.user);
+        setRealUser(session);
+        setViewAsState("admin");
+        localStorage.removeItem(VIEW_AS_KEY);
+        applyPrefs(session);
+        localStorage.setItem(SESSION_KEY, String(session.id));
+        await loadPermissions(session.id, "admin", Boolean(session.is_admin));
+        return null;
+      }
       await dbReady;
-    } catch (err) {
-      console.error("database not ready", err);
-      return "login.error.invalid";
-    }
-    try {
       const rows = await db.select().from(schema.users).where(eq(schema.users.email, email.trim().toLowerCase()));
       const fallback = rows.length
         ? rows
