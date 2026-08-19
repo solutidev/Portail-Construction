@@ -169,12 +169,18 @@ export async function loginUser(email: string, password: string) {
 }
 
 export async function handleDbRequest(req: { method?: string; body?: any }, res: any) {
-  if (req.method !== "POST") {
-    res.status(405).json({ error: "Method not allowed" });
-    return;
-  }
   const action = String(req.body?.action ?? "");
   try {
+    if (action === "ping" || req.method === "GET") {
+      await ensureSchema();
+      await ensureDemoUsers();
+      const count = await getPool().query("SELECT count(*)::int AS n FROM users");
+      return res.status(200).json({ ok: true, users: count.rows[0]?.n ?? 0 });
+    }
+    if (req.method !== "POST") {
+      res.status(405).json({ error: "Method not allowed" });
+      return;
+    }
     if (action === "login") {
       const result = await loginUser(String(req.body?.email ?? ""), String(req.body?.password ?? ""));
       return res.status(200).json(result);

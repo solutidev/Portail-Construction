@@ -111,6 +111,10 @@ const server = createServer(async (req, res) => {
       await mailHandler({ method: req.method, body }, adaptRes(res));
       return;
     }
+    if (url.pathname === "/api/db/ping" || (url.pathname === "/api/db" && req.method === "GET")) {
+      await dbHandler({ method: "POST", body: { action: "ping" } }, adaptRes(res));
+      return;
+    }
     if (url.pathname === "/api/db") {
       const body = req.method === "POST" ? await readJsonBody(req) : {};
       await dbHandler({ method: req.method, body }, adaptRes(res));
@@ -119,10 +123,6 @@ const server = createServer(async (req, res) => {
     if (url.pathname === "/healthz") {
       res.setHeader("Content-Type", "application/json");
       res.end(JSON.stringify({ ok: true }));
-      return;
-    }
-    if (url.pathname === "/api/db/ping") {
-      await dbHandler({ method: "POST", body: { action: "ping" } }, adaptRes(res));
       return;
     }
     await serveStatic(req, res, url);
