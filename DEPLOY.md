@@ -112,6 +112,28 @@ sudo bash /opt/frx-portal/scripts/update.sh
 
 Never run `docker compose down -v` unless you intend to wipe the database.
 
+## Fix: `SESSION_SECRET is missing a value`
+
+Compose interpolates `.env` before the container starts. An empty `SESSION_SECRET=` line is treated as missing.
+
+On the server:
+
+```bash
+cd /opt/frx-portal
+sudo bash scripts/ensure-env.sh
+sudo docker compose up -d --build
+```
+
+That script fills a blank `SESSION_SECRET` (and a blank `POSTGRES_PASSWORD`) without overwriting values you already set.
+
+Or set it by hand:
+
+```bash
+sudo nano /opt/frx-portal/.env
+# SESSION_SECRET=<paste output of: openssl rand -hex 32>
+sudo docker compose -f /opt/frx-portal/docker-compose.yml up -d
+```
+
 ## Troubleshooting
 
 ```bash

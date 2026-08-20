@@ -22,14 +22,7 @@ if [[ ! -d "$INSTALL_DIR/.git" ]]; then
 fi
 
 cd "$INSTALL_DIR"
-if [[ ! -f .env ]]; then
-  if [[ -f .env.sample ]]; then
-    sudo cp .env.sample .env
-  else
-    sudo cp .env.example .env
-  fi
-  echo "Created $INSTALL_DIR/.env from the sample. Edit POSTGRES_PASSWORD if needed."
-fi
+bash "$INSTALL_DIR/scripts/ensure-env.sh"
 
 sudo docker compose up -d --build
 echo

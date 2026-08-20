@@ -17,6 +17,9 @@ git fetch origin "$BRANCH"
 git checkout "$BRANCH"
 git pull --ff-only origin "$BRANCH"
 
+echo "Ensuring SESSION_SECRET and Postgres password exist in .env…"
+bash "$ROOT/scripts/ensure-env.sh"
+
 echo "Rebuilding app image (Postgres volume is kept)…"
 docker compose up -d --build --remove-orphans
 
