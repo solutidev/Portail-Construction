@@ -954,6 +954,8 @@ export const fr: Record<MessageKey, string> = {
   "sp.up": "Niveau supérieur",
   "sp.thisFolder": "Utiliser ce dossier",
   "sp.browseFolders": "Parcourir les dossiers",
+  "sp.folderTree": "Dossiers",
+  "sp.folderTreeHint": "Développez un dossier, puis cliquez sur son nom pour l’ouvrir.",
   "sp.pickerHint": "Ouvrez un dossier, puis choisissez Utiliser ce dossier. Un sous-dossier est accepté.",
   "sp.createHere": "Créer un dossier ici",
   "sp.uploadHere": "Téléverser ici",

@@ -953,6 +953,8 @@ export const en = {
   "sp.up": "Up one level",
   "sp.thisFolder": "Use this folder",
   "sp.browseFolders": "Browse folders",
+  "sp.folderTree": "Folders",
+  "sp.folderTreeHint": "Expand a folder, then click its name to open it.",
   "sp.pickerHint": "Open a folder, then choose Use this folder. You can pick a nested path.",
   "sp.createHere": "Create folder here",
   "sp.uploadHere": "Upload to this folder",

@@ -8,7 +8,6 @@ import {
   FolderInput,
   FolderOpen,
   FolderPlus,
-  Home,
   Pencil,
   Share2,
   Trash2,
@@ -45,8 +44,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-
-type BrowseFolder = SharePointFolder | { id: 0; name: string; sp_item_id: string; sp_drive_id: string; path: string };
+import { FolderTreeMenu, type BrowseFolder } from "@/components/project/FolderTreeMenu";
 
 type ItemTarget = {
   kind: "folder" | "item";
@@ -220,11 +218,11 @@ export function SharePointLibrary({
 
   useEffect(() => {
     if (loading || !active || !settings || !sharepointReady(settings)) return;
-    void loadItems(active, settings.drive_id).catch((err) =>
+    void loadItems(active, settings.drive_id, browse?.id).catch((err) =>
       setError(err instanceof Error ? err.message : "SharePoint error"),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, active?.id, active?.sp_item_id, settings?.connected, settings?.site_url]);
+  }, [loading, active?.id, active?.sp_item_id, browse?.id, settings?.connected, settings?.site_url]);
 
   async function createLinkedFolder() {
     if (!newName.trim()) return;
@@ -506,22 +504,22 @@ export function SharePointLibrary({
     <div className={compact ? "space-y-3" : "grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]"}>
       <div>
         <Card className="mb-3 gap-3 p-3">
-          {navFolders.length > 1 ? (
-            <div className="flex flex-wrap gap-1.5">
-              {navFolders.map((folder) => (
-                <Button
-                  key={`${folder.id}-${folder.sp_item_id}`}
-                  size="sm"
-                  variant={active?.id === folder.id && !browse ? "default" : "outline"}
-                  onClick={() => openRoot(folder)}
-                >
-                  {folder.id === 0 ? <Home className="size-3.5" /> : <FolderOpen className="size-3.5" />}
-                  {folder.name}
-                </Button>
-              ))}
-            </div>
-          ) : null}
           <div className="flex flex-wrap items-center gap-2">
+            <FolderTreeMenu
+              folders={navFolders}
+              driveId={settings.drive_id}
+              currentKey={browse?.id || active?.sp_item_id || `db-${active?.id ?? 0}`}
+              onOpen={(root, nextTrail) => {
+                if (nextTrail.length === 0) {
+                  openRoot(root);
+                  return;
+                }
+                setActiveId(root.id);
+                setTrail(nextTrail);
+                setBrowse(nextTrail[nextTrail.length - 1] ?? null);
+                setSelected([]);
+              }}
+            />
             <Button size="sm" variant="outline" disabled={trail.length === 0} onClick={() => goToCrumb(trail.length - 1)}>
               {t("sp.up")}
             </Button>
