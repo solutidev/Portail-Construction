@@ -282,6 +282,12 @@ function StaffNav({ onNavigate }: { onNavigate?: () => void }) {
         <FolderKanban className="size-4 shrink-0 opacity-80" />
         {t("sp.tab.projects")}
       </NavLink>
+      {user?.is_admin && user.view_as !== "client" ? (
+        <NavLink to="/reports" end onClick={onNavigate} className={({ isActive }) => linkClass(isActive)}>
+          <Presentation className="size-4 shrink-0 opacity-80" />
+          {t("nav.reports")}
+        </NavLink>
+      ) : null}
 
       <NavSection
         id="operations"
