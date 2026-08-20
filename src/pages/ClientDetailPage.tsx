@@ -45,6 +45,8 @@ import { NumberTicker } from "@/components/ui/number-ticker";
 import { useI18n } from "@/lib/i18n";
 import type { MessageKey } from "@/lib/i18n/en";
 import type { Client, Project, User } from "@/lib/types";
+import { assignProjectFolder, callSharePoint, loadAllFolders, type SpItem } from "@/lib/sharepoint";
+import { getSharePointSettings, sharepointReady } from "@/lib/settings";
 
 const projectFormEmpty = {
   name: "",
@@ -85,6 +87,11 @@ export function ClientDetailPage() {
   const [pForm, setPForm] = useState(projectFormEmpty);
   const [uForm, setUForm] = useState(userFormEmpty);
   const [saving, setSaving] = useState(false);
+  const [folderMode, setFolderMode] = useState<"later" | "existing" | "create">("existing");
+  const [folderChoices, setFolderChoices] = useState<SpItem[]>([]);
+  const [folderId, setFolderId] = useState("");
+  const [folderName, setFolderName] = useState("");
+  const [folderDrive, setFolderDrive] = useState("");
 
   async function load() {
     await dbReady;
@@ -119,6 +126,29 @@ export function ClientDetailPage() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  useEffect(() => {
+    if (!projectOpen) return;
+    void (async () => {
+      try {
+        const cfg = await getSharePointSettings();
+        if (!sharepointReady(cfg)) return;
+        const listed = await callSharePoint<{ items: SpItem[]; driveId?: string }>("list", {
+          driveId: cfg.drive_id,
+        });
+        setFolderChoices((listed.items ?? []).filter((item) => item.isFolder));
+        setFolderDrive(listed.driveId || cfg.drive_id);
+        const linked = await loadAllFolders();
+        const unused = (listed.items ?? []).filter(
+          (item) => item.isFolder && !linked.some((f) => f.sp_item_id === item.id),
+        );
+        if (unused[0]) setFolderId(unused[0].id);
+        else if (listed.items?.find((i) => i.isFolder)) setFolderId(listed.items.find((i) => i.isFolder)!.id);
+      } catch {
+        setFolderChoices([]);
+      }
+    })();
+  }, [projectOpen]);
 
   async function createProject(e: FormEvent) {
     e.preventDefault();
@@ -160,9 +190,42 @@ export function ClientDetailPage() {
       clientId: id,
       userId: user?.id,
     });
+    try {
+      const cfg = await getSharePointSettings();
+      if (sharepointReady(cfg) && folderMode !== "later") {
+        if (folderMode === "create") {
+          const name = folderName.trim() || pForm.name.trim();
+          const created = await callSharePoint<{ driveId: string; folder: { id: string; name: string } }>("mkdir", {
+            name,
+          });
+          await assignProjectFolder({
+            projectId: row.id,
+            clientId: id,
+            name: created.folder.name,
+            spItemId: created.folder.id,
+            spDriveId: created.driveId,
+            path: created.folder.name,
+          });
+        } else if (folderId) {
+          const picked = folderChoices.find((f) => f.id === folderId);
+          await assignProjectFolder({
+            projectId: row.id,
+            clientId: id,
+            name: picked?.name || pForm.name.trim(),
+            spItemId: folderId,
+            spDriveId: folderDrive || cfg.drive_id,
+            path: picked?.name || pForm.name.trim(),
+          });
+        }
+      }
+    } catch {
+      /* folder assignment is optional if SharePoint is down */
+    }
     setSaving(false);
     setProjectOpen(false);
     setPForm(projectFormEmpty);
+    setFolderMode("existing");
+    setFolderName("");
     await load();
     navigate(`/projects/${row.id}`);
   }

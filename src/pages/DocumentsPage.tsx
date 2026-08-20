@@ -1,6 +1,7 @@
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
+import { useWorkspace } from "@/lib/workspace";
 import { PageHeader } from "@/components/PageHeader";
 import { SharePointLibrary } from "@/components/project/SharePointLibrary";
 import { ShareAccessBoard } from "@/components/project/ShareAccessBoard";
@@ -9,13 +10,22 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 export function DocumentsPage() {
   const { t } = useI18n();
   const { can, user } = useAuth();
+  const { selectedClient, clientProjects } = useWorkspace();
   const [params, setParams] = useSearchParams();
   const tab = params.get("tab") === "access" ? "access" : "library";
   const canManage = Boolean(user?.is_admin || user?.user_type === "internal") && user?.view_as !== "client";
+  const forClient = selectedClient;
 
   return (
     <div className="space-y-6">
-      <PageHeader title={t("nav.documents")} description={t("sp.accessPanelHint")} />
+      <PageHeader
+        title={t("nav.documents")}
+        description={
+          forClient
+            ? t("sp.assignFolderHint")
+            : t("sp.accessPanelHint")
+        }
+      />
       {canManage ? (
         <Tabs
           value={tab}
@@ -41,8 +51,9 @@ export function DocumentsPage() {
         <SharePointLibrary
           projectId={0}
           projectName={t("nav.documents")}
-          client={null}
+          client={forClient}
           canCreate={can("documents", "create")}
+          scopeProjectIds={clientProjects.map((p) => p.id)}
         />
       )}
     </div>

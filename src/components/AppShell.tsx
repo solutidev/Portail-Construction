@@ -189,6 +189,15 @@ function OperationsLinks({
         {overviewLabel}
       </NavLink>
       <NavLink
+        to="/documents"
+        end
+        onClick={onNavigate}
+        className={({ isActive }) => linkClass(isActive)}
+      >
+        <FileText className="size-4 shrink-0 opacity-80" />
+        {t("nav.clientDocuments")}
+      </NavLink>
+      <NavLink
         to="/projects"
         end
         onClick={onNavigate}

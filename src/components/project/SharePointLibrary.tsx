@@ -63,12 +63,14 @@ export function SharePointLibrary({
   client,
   canCreate,
   compact = false,
+  scopeProjectIds,
 }: {
   projectId: number;
   projectName: string;
   client: Client | null;
   canCreate: boolean;
   compact?: boolean;
+  scopeProjectIds?: number[];
 }) {
   const { user } = useAuth();
   const { t, locale } = useI18n();
@@ -98,13 +100,25 @@ export function SharePointLibrary({
     ? { id: 0, name: t("sp.wholeLibrary"), sp_item_id: "", sp_drive_id: settings.drive_id, path: "/" }
     : null;
 
-  const visible = useMemo(
-    () => foldersVisibleTo(folders, shares, user, client?.id ?? null),
-    [folders, shares, user, client],
-  );
-  const showRootForClient = Boolean(libraryRoot && clientHasRootShare(shares, client?.id ?? null));
+  const visible = useMemo(() => {
+    const list = foldersVisibleTo(folders, shares, user, client?.id ?? null);
+    if (projectId !== 0) return list;
+    if (scopeProjectIds && scopeProjectIds.length > 0) {
+      const allowed = new Set(scopeProjectIds);
+      const scoped = list.filter((f) => allowed.has(f.project_id));
+      return scoped.length > 0 || !manager ? scoped : list;
+    }
+    return list;
+  }, [folders, shares, user, client, projectId, scopeProjectIds, manager]);
+  const showRootForClient = Boolean(libraryRoot && clientHasRootShare(shares, client?.id ?? null) && projectId === 0);
   const navFolders: BrowseFolder[] =
-    manager && libraryRoot ? [libraryRoot, ...visible] : showRootForClient && libraryRoot ? [libraryRoot, ...visible] : visible;
+    projectId !== 0
+      ? visible
+      : manager && libraryRoot
+        ? [libraryRoot, ...visible]
+        : showRootForClient && libraryRoot
+          ? [libraryRoot, ...visible]
+          : visible;
   const filteredNav = useMemo(() => {
     const q = folderQuery.trim().toLowerCase();
     if (!q) return navFolders;

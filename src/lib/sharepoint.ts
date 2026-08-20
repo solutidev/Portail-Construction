@@ -157,4 +157,41 @@ export async function deleteItemShares(itemId: string) {
   await db.delete(schema.sharepoint_shares).where(eq(schema.sharepoint_shares.item_id, itemId));
 }
 
+export async function assignProjectFolder(opts: {
+  projectId: number;
+  clientId: number;
+  name: string;
+  spItemId: string;
+  spDriveId: string;
+  path: string;
+}) {
+  await dbReady;
+  const existing = (await db
+    .select()
+    .from(schema.sharepoint_folders)
+    .where(eq(schema.sharepoint_folders.sp_item_id, opts.spItemId))) as SharePointFolder[];
+  let folder = existing[0];
+  if (folder) {
+    await db
+      .update(schema.sharepoint_folders)
+      .set({ project_id: opts.projectId, name: opts.name, path: opts.path, sp_drive_id: opts.spDriveId })
+      .where(eq(schema.sharepoint_folders.id, folder.id));
+    folder = { ...folder, project_id: opts.projectId, name: opts.name, path: opts.path, sp_drive_id: opts.spDriveId };
+  } else {
+    const [row] = await db
+      .insert(schema.sharepoint_folders)
+      .values({
+        project_id: opts.projectId,
+        name: opts.name,
+        sp_item_id: opts.spItemId,
+        sp_drive_id: opts.spDriveId,
+        path: opts.path,
+      })
+      .returning();
+    folder = row as SharePointFolder;
+  }
+  await upsertShare(folder.id, opts.clientId, { can_view: true, can_upload: false, can_edit: false });
+  return folder;
+}
+
 export { EMPTY_SHAREPOINT };
