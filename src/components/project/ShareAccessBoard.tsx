@@ -1,18 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronRight, FileText, FolderOpen, Home } from "lucide-react";
+import { FileText, FolderOpen, Home, Search } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { useWorkspace } from "@/lib/workspace";
-import {
-  callSharePoint,
-  loadAllFolders,
-  loadFolderShares,
-  shareFor,
-  upsertShare,
-  type SpItem,
-} from "@/lib/sharepoint";
+import { loadAllFolders, loadFolderShares, shareFor, upsertShare } from "@/lib/sharepoint";
 import { getSharePointSettings, sharepointReady } from "@/lib/settings";
 import type { SharePointFolder, SharePointSettings, SharePointShare } from "@/lib/types";
 import { EmptyState } from "@/components/EmptyState";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -25,9 +20,7 @@ export function ShareAccessBoard() {
   const [settings, setSettings] = useState<SharePointSettings | null>(null);
   const [folders, setFolders] = useState<SharePointFolder[]>([]);
   const [shares, setShares] = useState<SharePointShare[]>([]);
-  const [items, setItems] = useState<SpItem[]>([]);
   const [active, setActive] = useState<BrowseFolder | null>(null);
-  const [selectedFile, setSelectedFile] = useState<SpItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [folderQuery, setFolderQuery] = useState("");
@@ -52,16 +45,13 @@ export function ShareAccessBoard() {
         const nextFolders = await loadAllFolders();
         setFolders(nextFolders);
         setShares(await loadFolderShares(nextFolders.map((f) => f.id)));
-        const root: BrowseFolder = {
+        setActive({
           id: 0,
           name: t("sp.wholeLibrary"),
           sp_item_id: "",
           sp_drive_id: cfg.drive_id,
           path: "/",
-        };
-        setActive(root);
-        const listed = await callSharePoint<{ items: SpItem[] }>("list", { driveId: cfg.drive_id });
-        setItems(listed.items ?? []);
+        });
       } catch (err) {
         setError(err instanceof Error ? err.message : "SharePoint error");
       } finally {
@@ -70,32 +60,16 @@ export function ShareAccessBoard() {
     })();
   }, [t]);
 
-  async function openFolder(folder: BrowseFolder) {
-    setActive(folder);
-    setSelectedFile(null);
-    setError(null);
-    try {
-      const listed = await callSharePoint<{ items: SpItem[] }>("list", {
-        driveId: folder.sp_drive_id || settings?.drive_id,
-        itemId: folder.sp_item_id || undefined,
-      });
-      setItems(listed.items ?? []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "SharePoint error");
-    }
-  }
-
   async function setFlags(
     folderId: number,
     clientId: number,
-    itemId: string,
     key: "can_view" | "can_upload" | "can_edit",
     on: boolean,
     current: SharePointShare | null,
   ) {
     const next = {
       can_view: key === "can_view" ? on : Boolean(current?.can_view) || on,
-      can_upload: itemId ? false : key === "can_upload" ? on : Boolean(current?.can_upload),
+      can_upload: key === "can_upload" ? on : Boolean(current?.can_upload),
       can_edit: key === "can_edit" ? on : Boolean(current?.can_edit),
     };
     if (next.can_upload || next.can_edit) next.can_view = true;
@@ -103,12 +77,12 @@ export function ShareAccessBoard() {
       next.can_upload = false;
       next.can_edit = false;
     }
-    await upsertShare(folderId, clientId, next, itemId);
+    await upsertShare(folderId, clientId, next, "");
     await refreshShares();
   }
 
-  async function clearFlags(folderId: number, clientId: number, itemId: string) {
-    await upsertShare(folderId, clientId, { can_view: false, can_upload: false, can_edit: false }, itemId);
+  async function clearFlags(folderId: number, clientId: number) {
+    await upsertShare(folderId, clientId, { can_view: false, can_upload: false, can_edit: false }, "");
     await refreshShares();
   }
 
@@ -116,7 +90,7 @@ export function ShareAccessBoard() {
   const filteredNav = useMemo(() => {
     const q = folderQuery.trim().toLowerCase();
     if (!q) return nav;
-    return nav.filter((folder) => folder.name.toLowerCase().includes(q));
+    return nav.filter((folder) => folder.name.toLowerCase().includes(q) || folder.path.toLowerCase().includes(q));
   }, [nav, folderQuery]);
   const filteredClients = useMemo(() => {
     const q = clientQuery.trim().toLowerCase();
@@ -135,110 +109,81 @@ export function ShareAccessBoard() {
     );
   }
 
-  const accessFolderId = selectedFile ? active?.id ?? 0 : active?.id ?? 0;
-  const accessItemId = selectedFile?.id ?? "";
-  const accessName = selectedFile?.name ?? active?.name ?? t("sp.wholeLibrary");
-  const sharedCount = clients.filter((c) => Boolean(shareFor(shares, accessFolderId, c.id, accessItemId)?.can_view)).length;
+  const accessFolderId = active?.id ?? 0;
+  const sharedClients = clients.filter((c) => Boolean(shareFor(shares, accessFolderId, c.id, "")?.can_view));
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[260px_minmax(0,1fr)_300px]">
+    <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
       <Card className="gap-3 p-4">
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{t("sp.folders")}</p>
-        <Input value={folderQuery} onChange={(e) => setFolderQuery(e.target.value)} placeholder={t("sp.searchFolders")} />
-        <ul className="max-h-[32rem] space-y-1 overflow-auto pr-1">
-          {filteredNav.map((folder) => (
-            <li key={`${folder.id}-${folder.sp_item_id}`}>
-              <button
-                type="button"
-                onClick={() => void openFolder(folder)}
-                className={`flex w-full items-center gap-2 truncate rounded-md px-2.5 py-1.5 text-left text-sm ${
-                  active?.id === folder.id && !selectedFile ? "bg-primary/12 font-medium" : "hover:bg-muted"
-                }`}
-              >
-                {folder.id === 0 ? <Home className="size-3.5 shrink-0 opacity-70" /> : <FolderOpen className="size-3.5 shrink-0 opacity-70" />}
-                {folder.name}
-              </button>
-            </li>
-          ))}
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{t("sp.folders")}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{t("sp.browseHint")}</p>
+        </div>
+        <div className="relative">
+          <Search className="pointer-events-none absolute top-2.5 left-2.5 size-4 text-muted-foreground" />
+          <Input className="pl-8" value={folderQuery} onChange={(e) => setFolderQuery(e.target.value)} placeholder={t("sp.searchFolders")} />
+        </div>
+        <ul className="max-h-[36rem] space-y-1 overflow-auto pr-1">
+          {filteredNav.map((folder) => {
+            const count = clients.filter((c) => Boolean(shareFor(shares, folder.id, c.id, "")?.can_view)).length;
+            return (
+              <li key={`${folder.id}-${folder.sp_item_id}`}>
+                <button
+                  type="button"
+                  onClick={() => setActive(folder)}
+                  className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm ${
+                    active?.id === folder.id ? "bg-primary/12 font-medium" : "hover:bg-muted"
+                  }`}
+                >
+                  {folder.id === 0 ? <Home className="size-3.5 shrink-0 opacity-70" /> : <FolderOpen className="size-3.5 shrink-0 opacity-70" />}
+                  <span className="min-w-0 flex-1 truncate">{folder.name}</span>
+                  {count ? <Badge variant="secondary">{count}</Badge> : null}
+                </button>
+              </li>
+            );
+          })}
         </ul>
       </Card>
 
-      <Card className="gap-0 overflow-hidden py-0">
-        <div className="border-b px-4 py-3">
-          <p className="text-xs text-muted-foreground">{t("sp.sharingFor")}</p>
-          <p className="font-medium">{active?.name}</p>
+      <Card className="gap-4 p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{t("sp.accessPanel")}</p>
+            <h2 className="mt-1 font-display text-xl font-semibold tracking-tight">{active?.name ?? t("sp.wholeLibrary")}</h2>
+            <p className="text-sm text-muted-foreground">
+              {t("sp.accessThisFolder")} · {t("sp.sharedWith", { n: sharedClients.length })}
+            </p>
+          </div>
         </div>
-        {error ? <p className="px-4 py-2 text-sm text-destructive">{error}</p> : null}
-        {items.length === 0 ? (
-          <p className="px-4 py-8 text-sm text-muted-foreground">{t("sp.emptyFolder")}</p>
-        ) : (
-          <ul className="divide-y">
-            {items.map((item) => (
-              <li key={item.id}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (item.isFolder) {
-                      const linked = folders.find((f) => f.sp_item_id === item.id);
-                      void openFolder(
-                        linked ?? {
-                          id: 0,
-                          name: item.name,
-                          sp_item_id: item.id,
-                          sp_drive_id: active?.sp_drive_id || settings.drive_id,
-                          path: item.name,
-                        },
-                      );
-                      return;
-                    }
-                    setSelectedFile(item);
-                  }}
-                  className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm hover:bg-muted/60 ${
-                    selectedFile?.id === item.id ? "bg-primary/8" : ""
-                  }`}
-                >
-                  <span className="min-w-0 truncate font-medium">{item.name}</span>
-                  <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                    {item.isFolder ? t("sp.folder") : t("sp.shareFile")}
-                    <ChevronRight className="size-3.5" />
-                  </span>
-                </button>
-              </li>
+        {error ? <p className="text-sm text-destructive">{error}</p> : null}
+        {sharedClients.length ? (
+          <div className="flex flex-wrap gap-2">
+            {sharedClients.map((c) => (
+              <Badge key={c.id} variant="secondary">
+                {c.company_name}
+              </Badge>
             ))}
-          </ul>
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">{t("sp.noFoldersClient")}</p>
         )}
-      </Card>
-
-      <Card className="gap-3 p-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{t("sp.accessPanel")}</p>
-          <p className="mt-1 text-sm font-medium">{accessName}</p>
-          <p className="text-xs text-muted-foreground">
-            {accessItemId ? t("sp.accessThisFile") : t("sp.accessThisFolder")} · {t("sp.sharedWith", { n: sharedCount })}
-          </p>
+        <div className="relative max-w-md">
+          <Search className="pointer-events-none absolute top-2.5 left-2.5 size-4 text-muted-foreground" />
+          <Input className="pl-8" value={clientQuery} onChange={(e) => setClientQuery(e.target.value)} placeholder={t("sp.searchClients")} />
         </div>
-        <Input value={clientQuery} onChange={(e) => setClientQuery(e.target.value)} placeholder={t("sp.searchClients")} />
         {filteredClients.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t("sp.noClients")}</p>
         ) : (
-          <ul className="max-h-[32rem] space-y-3 overflow-auto pr-1">
+          <ul className="divide-y rounded-xl border">
             {filteredClients.map((c) => {
-              const share = shareFor(shares, accessFolderId, c.id, accessItemId);
+              const share = shareFor(shares, accessFolderId, c.id, "");
               return (
-                <li key={c.id} className="rounded-lg border p-3">
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <p className="truncate text-sm font-medium">{c.company_name}</p>
-                    {share?.can_view ? (
-                      <button
-                        type="button"
-                        className="text-[11px] text-muted-foreground hover:text-foreground"
-                        onClick={() => void clearFlags(accessFolderId, c.id, accessItemId)}
-                      >
-                        {t("sp.clearAccess")}
-                      </button>
-                    ) : null}
+                <li key={c.id} className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{c.company_name}</p>
+                    <p className="text-xs text-muted-foreground">{c.name}</p>
                   </div>
-                  <div className="grid gap-2">
+                  <div className="flex flex-wrap items-center gap-4">
                     {(
                       [
                         ["can_view", t("sp.canView")],
@@ -246,17 +191,21 @@ export function ShareAccessBoard() {
                         ["can_edit", t("sp.canEdit")],
                       ] as const
                     ).map(([key, label]) => (
-                      <label key={key} className="flex items-center justify-between gap-2 text-xs">
+                      <label key={key} className="flex items-center gap-2 text-xs">
                         {label}
                         <Switch
                           checked={Boolean(share?.[key])}
-                          disabled={Boolean(accessItemId) && key === "can_upload"}
                           onCheckedChange={(on) => {
-                            void setFlags(accessFolderId, c.id, accessItemId, key, on, share);
+                            void setFlags(accessFolderId, c.id, key, on, share);
                           }}
                         />
                       </label>
                     ))}
+                    {share?.can_view ? (
+                      <Button size="sm" variant="ghost" onClick={() => void clearFlags(accessFolderId, c.id)}>
+                        {t("sp.clearAccess")}
+                      </Button>
+                    ) : null}
                   </div>
                 </li>
               );

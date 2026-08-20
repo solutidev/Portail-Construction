@@ -146,4 +146,15 @@ export async function upsertShare(
   await db.insert(schema.sharepoint_shares).values({ folder_id: folderId, client_id: clientId, ...payload });
 }
 
+export async function deleteFolderRecord(folderId: number) {
+  await dbReady;
+  await db.delete(schema.sharepoint_shares).where(eq(schema.sharepoint_shares.folder_id, folderId));
+  await db.delete(schema.sharepoint_folders).where(eq(schema.sharepoint_folders.id, folderId));
+}
+
+export async function deleteItemShares(itemId: string) {
+  await dbReady;
+  await db.delete(schema.sharepoint_shares).where(eq(schema.sharepoint_shares.item_id, itemId));
+}
+
 export { EMPTY_SHAREPOINT };
