@@ -686,6 +686,44 @@ export function SharePointLibrary({
                         </a>
                       </Button>
                     ) : null}
+                    {manager ? (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setRenameTarget({
+                              kind: item.isFolder ? "folder" : "item",
+                              id: linked?.id,
+                              itemId: item.id,
+                              driveId: active?.sp_drive_id || settings.drive_id,
+                              name: item.name,
+                              path: linked?.path,
+                            });
+                            setRenameValue(item.name);
+                          }}
+                        >
+                          <Pencil className="size-4" />
+                          {t("sp.rename")}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() =>
+                            setDeleteTarget({
+                              kind: item.isFolder ? "folder" : "item",
+                              id: linked?.id,
+                              itemId: item.id,
+                              driveId: active?.sp_drive_id || settings.drive_id,
+                              name: item.name,
+                            })
+                          }
+                        >
+                          <Trash2 className="size-4" />
+                          {t("sp.delete")}
+                        </Button>
+                      </>
+                    ) : null}
                   </div>
                 </li>
               );
