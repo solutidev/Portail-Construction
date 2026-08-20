@@ -70,6 +70,10 @@ export async function loadFolderShares(folderIds: number[]) {
   return all.filter((s) => folderIds.includes(s.folder_id) || s.folder_id === 0);
 }
 
+function shareIsOn(value: unknown) {
+  return Number(value) === 1 || value === true;
+}
+
 export function foldersVisibleTo(
   folders: SharePointFolder[],
   shares: SharePointShare[],
@@ -78,19 +82,14 @@ export function foldersVisibleTo(
 ) {
   if (!user) return [];
   if (user.is_admin && user.view_as !== "client") return folders;
-  if (!clientId) {
-    const allowed = new Set(shares.filter((s) => s.can_view && s.folder_id !== 0).map((s) => s.folder_id));
-    return folders.filter((f) => allowed.has(f.id));
-  }
-  const allowed = new Set(
-    shares.filter((s) => s.client_id === clientId && s.can_view && s.folder_id !== 0).map((s) => s.folder_id),
-  );
+  const matches = shares.filter((s) => shareIsOn(s.can_view) && s.folder_id !== 0 && (!clientId || s.client_id === clientId));
+  const allowed = new Set(matches.map((s) => s.folder_id));
   return folders.filter((f) => allowed.has(f.id));
 }
 
 export function clientHasRootShare(shares: SharePointShare[], clientId: number | null) {
   if (!clientId) return false;
-  return shares.some((s) => s.client_id === clientId && s.folder_id === 0 && s.can_view);
+  return shares.some((s) => s.client_id === clientId && s.folder_id === 0 && shareIsOn(s.can_view));
 }
 
 export function shareFor(

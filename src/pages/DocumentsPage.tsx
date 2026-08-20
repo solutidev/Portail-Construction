@@ -54,7 +54,6 @@ export function DocumentsPage() {
           projectName={t("nav.documents")}
           client={forClient}
           canCreate={can("documents", "create")}
-          scopeProjectIds={clientProjects.map((p) => p.id)}
         />
       )}
     </div>

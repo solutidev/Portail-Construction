@@ -103,10 +103,10 @@ export function SharePointLibrary({
   const visible = useMemo(() => {
     const list = foldersVisibleTo(folders, shares, user, client?.id ?? null);
     if (projectId !== 0) return list;
-    if (scopeProjectIds && scopeProjectIds.length > 0) {
+    if (manager && scopeProjectIds && scopeProjectIds.length > 0 && client) {
       const allowed = new Set(scopeProjectIds);
-      const scoped = list.filter((f) => allowed.has(f.project_id));
-      return scoped.length > 0 || !manager ? scoped : list;
+      const scoped = list.filter((f) => allowed.has(f.project_id) || f.project_id === 0);
+      return scoped.length > 0 ? scoped : list;
     }
     return list;
   }, [folders, shares, user, client, projectId, scopeProjectIds, manager]);
