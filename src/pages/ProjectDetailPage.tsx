@@ -3,7 +3,7 @@ import { Switch } from "@/components/ui/switch";
 import { getCurrentPosition } from "@/lib/timeclock";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { eq } from "drizzle-orm";
-import { ArrowLeft, FolderKanban, Plus, Users } from "lucide-react";
+import { ArrowLeft, FolderKanban, Pencil, Plus, Users } from "lucide-react";
 import { db, dbReady, schema } from "../db";
 import { useAuth } from "@/lib/auth";
 import { logActivity } from "@/lib/activity";
@@ -57,6 +57,14 @@ import { SharePointLibrary } from "@/components/project/SharePointLibrary";
 import { ProjectReportsSection } from "@/components/project/ProjectReportsSection";
 import { getCompanyProfile } from "@/lib/settings";
 import { isProjectSection, projectSectionPath } from "@/lib/project-nav";
+import {
+  applyProjectFolder,
+  formFromProject,
+  ProjectFormFields,
+  projectInsertValues,
+  useSharePointFolders,
+  type ProjectFormValues,
+} from "@/components/ProjectFormFields";
 
 export function ProjectDetailPage() {
   const { projectId, section: sectionParam } = useParams();
@@ -83,6 +91,10 @@ export function ProjectDetailPage() {
   const [company, setCompany] = useState<CompanyProfile | null>(null);
   const [clientRow, setClientRow] = useState<Client | null>(null);
   const [dialog, setDialog] = useState<string | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editForm, setEditForm] = useState<ProjectFormValues | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
+  const editFolders = useSharePointFolders(editOpen, id);
 
   async function load() {
     await dbReady;
@@ -173,6 +185,18 @@ export function ProjectDetailPage() {
           <>
             <StatusBadge value={project.status} />
             <StatusBadge value={project.phase} />
+            {user?.is_admin || user?.user_type === "internal" ? (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setEditForm(formFromProject(project));
+                  setEditOpen(true);
+                }}
+              >
+                <Pencil className="size-4" />
+                {t("projects.edit")}
+              </Button>
+            ) : null}
           </>
         }
       />
@@ -463,6 +487,81 @@ export function ProjectDetailPage() {
           await load();
         }}
       />
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t("projects.edit")}</DialogTitle>
+          </DialogHeader>
+          {editForm ? (
+            <form
+              className="grid gap-4"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void (async () => {
+                  setEditSaving(true);
+                  try {
+                    const values = projectInsertValues(editForm, project.client_id, {
+                      spent: project.spent,
+                      sort_order: project.sort_order,
+                    });
+                    await db
+                      .update(schema.projects)
+                      .set({
+                        name: values.name,
+                        project_number: values.project_number,
+                        description: values.description,
+                        status: values.status,
+                        phase: values.phase,
+                        project_type: values.project_type,
+                        address: values.address,
+                        city: values.city,
+                        start_date: values.start_date,
+                        end_date: values.end_date,
+                        budget: values.budget,
+                      })
+                      .where(eq(schema.projects.id, id));
+                    await applyProjectFolder({
+                      projectId: id,
+                      clientId: project.client_id,
+                      projectName: editForm.name.trim(),
+                      folderMode: editFolders.folderMode,
+                      folderId: editFolders.folderId,
+                      folderName: editFolders.folderName,
+                      folderDrive: editFolders.folderDrive,
+                      folderChoices: editFolders.folderChoices,
+                    });
+                    setEditOpen(false);
+                    await load();
+                  } finally {
+                    setEditSaving(false);
+                  }
+                })();
+              }}
+            >
+              <ProjectFormFields
+                form={editForm}
+                onChange={setEditForm}
+                folderMode={editFolders.folderMode}
+                onFolderMode={editFolders.setFolderMode}
+                folderChoices={editFolders.folderChoices}
+                folderId={editFolders.folderId}
+                onFolderId={editFolders.setFolderId}
+                folderName={editFolders.folderName}
+                onFolderName={editFolders.setFolderName}
+                assignedName={editFolders.assignedName}
+              />
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setEditOpen(false)}>
+                  {t("clients.cancel")}
+                </Button>
+                <Button type="submit" disabled={editSaving || !editForm.name.trim()}>
+                  {editSaving ? t("clients.saving") : t("projects.save")}
+                </Button>
+              </DialogFooter>
+            </form>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

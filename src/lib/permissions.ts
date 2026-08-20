@@ -58,5 +58,6 @@ export function visibleProjectModules(
     "team",
     "reports",
   ];
+  if (user?.user_type === "external" || user?.view_as === "client") return ids;
   return ids.filter((id) => can(user, permissions, id, "view", { projectId }));
 }

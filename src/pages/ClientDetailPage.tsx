@@ -620,6 +620,37 @@ export function ClientDetailPage() {
                 />
               </Field>
             </div>
+            <div className="space-y-2 rounded-lg border p-3">
+              <p className="text-sm font-medium">{t("sp.assignFolder")}</p>
+              <p className="text-xs text-muted-foreground">{t("sp.assignFolderHint")}</p>
+              <Select value={folderMode} onValueChange={(v) => setFolderMode(v as typeof folderMode)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="existing">{t("sp.assignExisting")}</SelectItem>
+                  <SelectItem value="create">{t("sp.assignCreate")}</SelectItem>
+                  <SelectItem value="later">{t("sp.pickLater")}</SelectItem>
+                </SelectContent>
+              </Select>
+              {folderMode === "existing" ? (
+                <Select value={folderId} onValueChange={setFolderId}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {folderChoices.map((folder) => (
+                      <SelectItem key={folder.id} value={folder.id}>
+                        {folder.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : null}
+              {folderMode === "create" ? (
+                <Input value={folderName} onChange={(e) => setFolderName(e.target.value)} placeholder={t("sp.folderName")} />
+              ) : null}
+            </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setProjectOpen(false)}>
                 {t("clients.cancel")}

@@ -47,6 +47,15 @@ import { BOARD_COLLAPSE_KEY } from "@/lib/constants";
 import { money, percent } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { BoardColumn, Project } from "@/lib/types";
+import { db, schema } from "../db";
+import {
+  applyProjectFolder,
+  emptyProjectForm,
+  ProjectFormFields,
+  projectInsertValues,
+  useSharePointFolders,
+  type ProjectFormValues,
+} from "@/components/ProjectFormFields";
 
 type DragPayload =
   | { type: "card"; projectId: number; fromSlug: string }
@@ -124,6 +133,10 @@ export function ProjectsPage() {
   const [renameColor, setRenameColor] = useState("slate");
   const [busy, setBusy] = useState(false);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(readCollapsed);
+  const [projectOpen, setProjectOpen] = useState(false);
+  const [pForm, setPForm] = useState<ProjectFormValues>(emptyProjectForm);
+  const [newClientId, setNewClientId] = useState<number | "">(selectedClientId ?? "");
+  const folderState = useSharePointFolders(projectOpen);
 
   useEffect(() => {
     localStorage.setItem(BOARD_COLLAPSE_KEY, JSON.stringify(collapsed));
@@ -249,6 +262,46 @@ export function ProjectsPage() {
   async function onColor(col: BoardColumn, color: string) {
     setColumns((prev) => prev.map((c) => (c.id === col.id ? { ...c, color } : c)));
     await updateBoardColumnColor(col.id, color);
+  }
+
+  async function createFromBoard() {
+    if (!pForm.name.trim() || !newClientId) return;
+    setBusy(true);
+    try {
+      const [row] = await db
+        .insert(schema.projects)
+        .values(projectInsertValues(pForm, Number(newClientId)))
+        .returning();
+      if (user) {
+        await db.insert(schema.project_members).values({
+          project_id: row.id,
+          user_id: user.id,
+          role: user.is_admin ? "Administrator" : "Project Manager",
+        });
+      }
+      await logActivity({
+        action: "created project",
+        details: row.name,
+        projectId: row.id,
+        clientId: Number(newClientId),
+        userId: user?.id,
+      });
+      await applyProjectFolder({
+        projectId: row.id,
+        clientId: Number(newClientId),
+        projectName: pForm.name.trim(),
+        folderMode: folderState.folderMode,
+        folderId: folderState.folderId,
+        folderName: folderState.folderName,
+        folderDrive: folderState.folderDrive,
+        folderChoices: folderState.folderChoices,
+      });
+      setProjectOpen(false);
+      await refresh();
+      navigate(`/projects/${row.id}`);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function onDelete(col: BoardColumn) {
@@ -578,6 +631,44 @@ export function ProjectsPage() {
           </div>
         </>
       )}
+
+      <Dialog open={projectOpen} onOpenChange={setProjectOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t("projects.new")}</DialogTitle>
+          </DialogHeader>
+          <form
+            className="grid gap-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void createFromBoard();
+            }}
+          >
+            <ProjectFormFields
+              form={pForm}
+              onChange={setPForm}
+              clients={clients}
+              clientId={newClientId}
+              onClientId={setNewClientId}
+              folderMode={folderState.folderMode}
+              onFolderMode={folderState.setFolderMode}
+              folderChoices={folderState.folderChoices}
+              folderId={folderState.folderId}
+              onFolderId={folderState.setFolderId}
+              folderName={folderState.folderName}
+              onFolderName={folderState.setFolderName}
+            />
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setProjectOpen(false)}>
+                {t("clients.cancel")}
+              </Button>
+              <Button type="submit" disabled={busy || !pForm.name.trim() || !newClientId}>
+                {busy ? t("clients.creating") : t("clients.createProject")}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent className="sm:max-w-sm">
