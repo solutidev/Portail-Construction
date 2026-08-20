@@ -55,7 +55,7 @@ async function graph<T>(token: string, path: string, init?: RequestInit): Promis
       ...(init?.headers ?? {}),
     },
   });
-  if (res.status === 204) return undefined as T;
+  if (res.status === 202 || res.status === 204) return undefined as T;
   const json = (await res.json().catch(() => ({}))) as T & GraphError;
   if (!res.ok) {
     throw new Error(json.error?.message || `Graph ${res.status}`);
@@ -116,6 +116,23 @@ export async function renameItem(token: string, driveId: string, itemId: string,
 
 export async function deleteItem(token: string, driveId: string, itemId: string) {
   await graph(token, `/drives/${driveId}/items/${itemId}`, { method: "DELETE" });
+}
+
+export async function copyItem(token: string, driveId: string, itemId: string, parentId?: string, name?: string) {
+  const body: Record<string, unknown> = {};
+  if (name) body.name = name;
+  if (parentId) body.parentReference = { id: parentId };
+  return graph<DriveItem>(token, `/drives/${driveId}/items/${itemId}/copy`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function moveItem(token: string, driveId: string, itemId: string, parentId: string) {
+  return graph<DriveItem>(token, `/drives/${driveId}/items/${itemId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ parentReference: { id: parentId } }),
+  });
 }
 
 export async function uploadSmallFile(

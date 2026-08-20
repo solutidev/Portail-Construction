@@ -1,10 +1,12 @@
 import {
+  copyItem,
   createFolder,
   deleteItem,
   downloadFile,
   getGraphToken,
   listChildren,
   mergeSharePointConfig,
+  moveItem,
   officeEditUrl,
   renameItem,
   resolveDrive,

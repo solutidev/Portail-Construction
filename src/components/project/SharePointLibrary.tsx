@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  CheckSquare,
   ChevronRight,
+  Copy,
   Download,
   FileText,
+  FolderInput,
   FolderOpen,
   FolderPlus,
   Home,
@@ -38,6 +41,7 @@ import type { Client, SharePointFolder, SharePointSettings, SharePointShare } fr
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -86,6 +90,9 @@ export function SharePointLibrary({
   const [renameTarget, setRenameTarget] = useState<ItemTarget | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<ItemTarget | null>(null);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [transfer, setTransfer] = useState<"move" | "copy" | null>(null);
+  const [destId, setDestId] = useState("");
 
   const libraryRoot: BrowseFolder | null = settings
     ? { id: 0, name: t("sp.wholeLibrary"), sp_item_id: "", sp_drive_id: settings.drive_id, path: "/" }
@@ -134,6 +141,8 @@ export function SharePointLibrary({
     return clients.filter((c) => c.company_name.toLowerCase().includes(q) || c.name.toLowerCase().includes(q));
   }, [clients, clientQuery]);
 
+  const selectedItems = visibleItems.filter((item) => selected.includes(item.id));
+
   async function reloadMeta() {
     const nextFolders = projectId === 0 ? await loadAllFolders() : await loadProjectFolders(projectId);
     const nextShares = await loadFolderShares(nextFolders.map((f) => f.id));
@@ -175,6 +184,10 @@ export function SharePointLibrary({
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, user?.id, user?.view_as, client?.id]);
+
+  useEffect(() => {
+    setSelected([]);
+  }, [active?.id, active?.sp_item_id]);
 
   useEffect(() => {
     if (loading || !active || !settings || !sharepointReady(settings)) return;
@@ -255,17 +268,88 @@ export function SharePointLibrary({
         const message = err instanceof Error ? err.message : "";
         if (!/itemNotFound|404|does not exist|not found/i.test(message)) throw err;
       }
-      if (deleteTarget.kind === "folder" && deleteTarget.id) {
-        await deleteFolderRecord(deleteTarget.id);
-        setActiveId(0);
-      } else {
-        await deleteItemShares(deleteTarget.itemId);
-      }
+      if (deleteTarget.kind === "folder" && deleteTarget.id) await deleteFolderRecord(deleteTarget.id);
+      else await deleteItemShares(deleteTarget.itemId);
       setDeleteTarget(null);
+      setSelected((prev) => prev.filter((id) => id !== deleteTarget.itemId));
+      if (deleteTarget.kind === "folder" && deleteTarget.id === active?.id) setActiveId(0);
       await reloadMeta();
-      if (active && deleteTarget.kind === "item") await loadItems(active);
+      if (active) await loadItems(active);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not delete");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteSelected() {
+    if (selectedItems.length === 1) {
+      const item = selectedItems[0];
+      const linked = folders.find((f) => f.sp_item_id === item.id);
+      setDeleteTarget({
+        kind: item.isFolder ? "folder" : "item",
+        id: linked?.id,
+        itemId: item.id,
+        driveId: active?.sp_drive_id || settings?.drive_id || "",
+        name: item.name,
+      });
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      for (const item of selectedItems) {
+        try {
+          await callSharePoint("delete", { driveId: active?.sp_drive_id || settings?.drive_id, itemId: item.id });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : "";
+          if (!/itemNotFound|404|does not exist|not found/i.test(message)) throw err;
+        }
+        const linked = folders.find((f) => f.sp_item_id === item.id);
+        if (linked) await deleteFolderRecord(linked.id);
+        else await deleteItemShares(item.id);
+      }
+      setSelected([]);
+      await reloadMeta();
+      if (active) await loadItems(active);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function runTransfer() {
+    if (!transfer || !active) return;
+    const parentId = destId || (transfer === "copy" ? active.sp_item_id : "");
+    if (transfer === "move" && !parentId) {
+      setError(t("sp.pickDestination"));
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      for (const item of selectedItems) {
+        if (transfer === "copy") {
+          await callSharePoint("copy", {
+            driveId: active.sp_drive_id || settings?.drive_id,
+            itemId: item.id,
+            parentId: parentId || undefined,
+          });
+        } else {
+          await callSharePoint("move", {
+            driveId: active.sp_drive_id || settings?.drive_id,
+            itemId: item.id,
+            parentId,
+          });
+        }
+      }
+      setTransfer(null);
+      setSelected([]);
+      await reloadMeta();
+      if (active) await loadItems(active);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not complete transfer");
     } finally {
       setBusy(false);
     }
@@ -361,6 +445,10 @@ export function SharePointLibrary({
     };
   }
 
+  function toggleSelected(id: string, on: boolean) {
+    setSelected((prev) => (on ? Array.from(new Set([...prev, id])) : prev.filter((x) => x !== id)));
+  }
+
   if (loading) return <p className="text-sm text-muted-foreground">{t("sp.loading")}</p>;
   if (!settings || !sharepointReady(settings)) {
     return (
@@ -451,25 +539,6 @@ export function SharePointLibrary({
             <p className="text-xs text-muted-foreground">{t("sp.aclHint", { project: projectName })}</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            {manager && active && active.id !== 0 ? (
-              <>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    setRenameTarget(asTarget(active));
-                    setRenameValue(active.name);
-                  }}
-                >
-                  <Pencil className="size-4" />
-                  {t("sp.rename")}
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => setDeleteTarget(asTarget(active))}>
-                  <Trash2 className="size-4" />
-                  {t("sp.delete")}
-                </Button>
-              </>
-            ) : null}
             {manager && active ? (
               <Button size="sm" variant="outline" onClick={() => openShare(active.id, "", active.name)}>
                 <Share2 className="size-4" />
@@ -496,6 +565,68 @@ export function SharePointLibrary({
           </div>
         </div>
         {error ? <p className="mb-3 text-sm text-destructive">{error}</p> : null}
+        {manager ? (
+          <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border bg-card px-3 py-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setSelected(selected.length === visibleItems.length ? [] : visibleItems.map((i) => i.id))}
+            >
+              <CheckSquare className="size-4" />
+              {t("sp.selectAll")}
+            </Button>
+            <span className="text-xs text-muted-foreground">{t("sp.selected", { n: selected.length })}</span>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={selectedItems.length !== 1}
+              onClick={() => {
+                const item = selectedItems[0];
+                const linked = folders.find((f) => f.sp_item_id === item.id);
+                setRenameTarget({
+                  kind: item.isFolder ? "folder" : "item",
+                  id: linked?.id,
+                  itemId: item.id,
+                  driveId: active?.sp_drive_id || settings.drive_id,
+                  name: item.name,
+                  path: linked?.path,
+                });
+                setRenameValue(item.name);
+              }}
+            >
+              <Pencil className="size-4" />
+              {t("sp.rename")}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={selected.length === 0}
+              onClick={() => {
+                setDestId("");
+                setTransfer("move");
+              }}
+            >
+              <FolderInput className="size-4" />
+              {t("sp.move")}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={selected.length === 0}
+              onClick={() => {
+                setDestId(active?.sp_item_id || "");
+                setTransfer("copy");
+              }}
+            >
+              <Copy className="size-4" />
+              {t("sp.copy")}
+            </Button>
+            <Button size="sm" variant="destructive" disabled={selected.length === 0 || busy} onClick={() => void deleteSelected()}>
+              <Trash2 className="size-4" />
+              {t("sp.delete")}
+            </Button>
+          </div>
+        ) : null}
         {!active ? (
           <EmptyState icon={<FileText className="size-5" />} title={t("sp.pickFolder")} description="" />
         ) : visibleItems.length === 0 ? (
@@ -508,11 +639,19 @@ export function SharePointLibrary({
               const linked = folders.find((f) => f.sp_item_id === item.id);
               return (
                 <li key={item.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
+                  {manager ? (
+                    <Checkbox
+                      checked={selected.includes(item.id)}
+                      onCheckedChange={(on) => toggleSelected(item.id, Boolean(on))}
+                      aria-label={t("sp.select")}
+                    />
+                  ) : null}
                   <button
                     type="button"
                     className="min-w-0 flex-1 text-left"
                     onClick={() => {
                       if (item.isFolder && linked) setActiveId(linked.id);
+                      else if (manager) toggleSelected(item.id, !selected.includes(item.id));
                     }}
                   >
                     <p className="truncate font-medium">{item.name}</p>
@@ -532,44 +671,6 @@ export function SharePointLibrary({
                       <Button size="sm" variant="outline" onClick={() => openShare(active.id, item.isFolder ? "" : item.id, item.name)}>
                         <Share2 className="size-4" />
                         {item.isFolder ? t("sp.shareFolder") : t("sp.shareFile")}
-                      </Button>
-                    ) : null}
-                    {manager ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setRenameTarget({
-                            kind: item.isFolder ? "folder" : "item",
-                            id: linked?.id,
-                            itemId: item.id,
-                            driveId: active.sp_drive_id || settings.drive_id,
-                            name: item.name,
-                            path: linked?.path,
-                          });
-                          setRenameValue(item.name);
-                        }}
-                      >
-                        <Pencil className="size-4" />
-                        {t("sp.rename")}
-                      </Button>
-                    ) : null}
-                    {manager ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() =>
-                          setDeleteTarget({
-                            kind: item.isFolder ? "folder" : "item",
-                            id: linked?.id,
-                            itemId: item.id,
-                            driveId: active.sp_drive_id || settings.drive_id,
-                            name: item.name,
-                          })
-                        }
-                      >
-                        <Trash2 className="size-4" />
-                        {t("sp.delete")}
                       </Button>
                     ) : null}
                     {!item.isFolder ? (
@@ -708,6 +809,52 @@ export function SharePointLibrary({
             </Button>
             <Button type="button" disabled={busy || !renameValue.trim()} onClick={() => void renameCurrent()}>
               {t("sp.rename")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(transfer)} onOpenChange={(open) => !open && setTransfer(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{transfer === "copy" ? t("sp.copyTitle") : t("sp.moveTitle")}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">{t("sp.pickDestination")}</p>
+          <ul className="max-h-72 space-y-1 overflow-auto">
+            {transfer === "copy" ? (
+              <li>
+                <button
+                  type="button"
+                  className={`w-full rounded-md px-3 py-2 text-left text-sm ${!destId || destId === active?.sp_item_id ? "bg-primary/12 font-medium" : "hover:bg-muted"}`}
+                  onClick={() => setDestId(active?.sp_item_id || "")}
+                >
+                  {t("sp.copyHere")}
+                </button>
+              </li>
+            ) : null}
+            {navFolders
+              .filter((folder) => folder.sp_item_id && folder.sp_item_id !== active?.sp_item_id)
+              .map((folder) => (
+                <li key={folder.sp_item_id}>
+                  <button
+                    type="button"
+                    className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm ${
+                      destId === folder.sp_item_id ? "bg-primary/12 font-medium" : "hover:bg-muted"
+                    }`}
+                    onClick={() => setDestId(folder.sp_item_id)}
+                  >
+                    <FolderOpen className="size-3.5 opacity-70" />
+                    {folder.name}
+                  </button>
+                </li>
+              ))}
+          </ul>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setTransfer(null)}>
+              {t("clients.cancel")}
+            </Button>
+            <Button type="button" disabled={busy || (transfer === "move" && !destId)} onClick={() => void runTransfer()}>
+              {transfer === "copy" ? t("sp.copy") : t("sp.move")}
             </Button>
           </DialogFooter>
         </DialogContent>
