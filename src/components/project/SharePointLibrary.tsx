@@ -501,7 +501,75 @@ export function SharePointLibrary({
   const canMakeHere = Boolean(manager || canUpload);
 
   return (
-    <div className={compact ? "space-y-3" : "grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]"}>
+    <div className="space-y-3">
+      {manager && !compact ? (
+        <Card className="gap-3 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{t("sp.accessPanel")}</p>
+              <p className="mt-1 text-sm font-medium">{accessName}</p>
+              <p className="text-xs text-muted-foreground">
+                {accessItemId ? t("sp.accessThisFile") : t("sp.accessThisFolder")} · {t("sp.sharedWith", { n: sharedCount })}
+              </p>
+            </div>
+            <div className="relative w-full max-w-xs">
+              <Input value={clientQuery} onChange={(e) => setClientQuery(e.target.value)} placeholder={t("sp.searchClients")} />
+            </div>
+          </div>
+          {filteredClients.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{t("sp.noClients")}</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[36rem] text-sm">
+                <thead>
+                  <tr className="border-b text-left text-xs text-muted-foreground">
+                    <th className="py-2 pr-3 font-medium">{t("nav.clients")}</th>
+                    <th className="py-2 px-2 font-medium">{t("sp.canView")}</th>
+                    <th className="py-2 px-2 font-medium">{t("sp.canUpload")}</th>
+                    <th className="py-2 px-2 font-medium">{t("sp.canEdit")}</th>
+                    <th className="py-2 pl-2 font-medium" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredClients.map((c) => {
+                    const share = shareFor(shares, accessFolderId, c.id, accessItemId);
+                    return (
+                      <tr key={c.id} className="border-b last:border-0">
+                        <td className="py-2 pr-3">
+                          <p className="truncate font-medium">{c.company_name}</p>
+                          <p className="text-xs text-muted-foreground">{c.name}</p>
+                        </td>
+                        {(
+                          [
+                            ["can_view", false],
+                            ["can_upload", Boolean(accessItemId)],
+                            ["can_edit", false],
+                          ] as const
+                        ).map(([key, disabled]) => (
+                          <td key={key} className="px-2 py-2">
+                            <Switch
+                              checked={Boolean(share?.[key])}
+                              disabled={disabled}
+                              onCheckedChange={(on) => void setFlags(accessFolderId, c.id, accessItemId, key, on, share)}
+                            />
+                          </td>
+                        ))}
+                        <td className="py-2 pl-2 text-right">
+                          {share?.can_view ? (
+                            <Button size="sm" variant="ghost" onClick={() => void clearFlags(accessFolderId, c.id, accessItemId)}>
+                              {t("sp.clearAccess")}
+                            </Button>
+                          ) : null}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      ) : null}
       <div>
         <Card className="mb-3 gap-3 p-3">
           <div className="flex flex-wrap items-center gap-2">
@@ -753,62 +821,6 @@ export function SharePointLibrary({
           </ul>
         )}
       </div>
-
-      {manager ? (
-        <Card className="gap-3 p-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{t("sp.accessPanel")}</p>
-            <p className="mt-1 text-sm font-medium">{accessName}</p>
-            <p className="text-xs text-muted-foreground">
-              {accessItemId ? t("sp.accessThisFile") : t("sp.accessThisFolder")} · {t("sp.sharedWith", { n: sharedCount })}
-            </p>
-          </div>
-          <Input value={clientQuery} onChange={(e) => setClientQuery(e.target.value)} placeholder={t("sp.searchClients")} />
-          {filteredClients.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{t("sp.noClients")}</p>
-          ) : (
-            <ul className="max-h-[28rem] space-y-3 overflow-auto pr-1">
-              {filteredClients.map((c) => {
-                const share = shareFor(shares, accessFolderId, c.id, accessItemId);
-                return (
-                  <li key={c.id} className="rounded-lg border p-3">
-                    <div className="mb-2 flex items-center justify-between gap-2">
-                      <p className="truncate text-sm font-medium">{c.company_name}</p>
-                      {share?.can_view ? (
-                        <button
-                          type="button"
-                          className="text-[11px] text-muted-foreground hover:text-foreground"
-                          onClick={() => void clearFlags(accessFolderId, c.id, accessItemId)}
-                        >
-                          {t("sp.clearAccess")}
-                        </button>
-                      ) : null}
-                    </div>
-                    <div className="grid gap-2">
-                      {(
-                        [
-                          ["can_view", t("sp.canView")],
-                          ["can_upload", t("sp.canUpload")],
-                          ["can_edit", t("sp.canEdit")],
-                        ] as const
-                      ).map(([key, label]) => (
-                        <label key={key} className="flex items-center justify-between gap-2 text-xs">
-                          {label}
-                          <Switch
-                            checked={Boolean(share?.[key])}
-                            disabled={Boolean(accessItemId) && key === "can_upload"}
-                            onCheckedChange={(on) => void setFlags(accessFolderId, c.id, accessItemId, key, on, share)}
-                          />
-                        </label>
-                      ))}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </Card>
-      ) : null}
 
       <Dialog open={folderDialog} onOpenChange={setFolderDialog}>
         <DialogContent className="sm:max-w-md">

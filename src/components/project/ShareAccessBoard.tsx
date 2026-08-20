@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { FileText, FolderOpen, Home, Search } from "lucide-react";
+import { FileText, Search } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { useWorkspace } from "@/lib/workspace";
 import { loadAllFolders, loadFolderShares, shareFor, upsertShare } from "@/lib/sharepoint";
@@ -11,8 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-
-type BrowseFolder = SharePointFolder | { id: 0; name: string; sp_item_id: string; sp_drive_id: string; path: string };
+import { FolderTreePanel, type BrowseFolder } from "@/components/project/FolderTreePanel";
 
 export function ShareAccessBoard() {
   const { t } = useI18n();
@@ -23,7 +22,6 @@ export function ShareAccessBoard() {
   const [active, setActive] = useState<BrowseFolder | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [folderQuery, setFolderQuery] = useState("");
   const [clientQuery, setClientQuery] = useState("");
 
   const libraryRoot: BrowseFolder | null = settings
@@ -87,11 +85,13 @@ export function ShareAccessBoard() {
   }
 
   const nav: BrowseFolder[] = libraryRoot ? [libraryRoot, ...folders] : folders;
-  const filteredNav = useMemo(() => {
-    const q = folderQuery.trim().toLowerCase();
-    if (!q) return nav;
-    return nav.filter((folder) => folder.name.toLowerCase().includes(q) || folder.path.toLowerCase().includes(q));
-  }, [nav, folderQuery]);
+  const shareCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const folder of nav) {
+      counts[`${folder.id}`] = clients.filter((c) => Boolean(shareFor(shares, folder.id, c.id, "")?.can_view)).length;
+    }
+    return counts;
+  }, [nav, clients, shares]);
   const filteredClients = useMemo(() => {
     const q = clientQuery.trim().toLowerCase();
     if (!q) return clients;
@@ -113,47 +113,28 @@ export function ShareAccessBoard() {
   const sharedClients = clients.filter((c) => Boolean(shareFor(shares, accessFolderId, c.id, "")?.can_view));
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
+    <div className="grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
       <Card className="gap-3 p-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{t("sp.folders")}</p>
-          <p className="mt-1 text-xs text-muted-foreground">{t("sp.browseHint")}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{t("sp.folderTreeHint")}</p>
         </div>
-        <div className="relative">
-          <Search className="pointer-events-none absolute top-2.5 left-2.5 size-4 text-muted-foreground" />
-          <Input className="pl-8" value={folderQuery} onChange={(e) => setFolderQuery(e.target.value)} placeholder={t("sp.searchFolders")} />
-        </div>
-        <ul className="max-h-[36rem] space-y-1 overflow-auto pr-1">
-          {filteredNav.map((folder) => {
-            const count = clients.filter((c) => Boolean(shareFor(shares, folder.id, c.id, "")?.can_view)).length;
-            return (
-              <li key={`${folder.id}-${folder.sp_item_id}`}>
-                <button
-                  type="button"
-                  onClick={() => setActive(folder)}
-                  className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm ${
-                    active?.id === folder.id ? "bg-primary/12 font-medium" : "hover:bg-muted"
-                  }`}
-                >
-                  {folder.id === 0 ? <Home className="size-3.5 shrink-0 opacity-70" /> : <FolderOpen className="size-3.5 shrink-0 opacity-70" />}
-                  <span className="min-w-0 flex-1 truncate">{folder.name}</span>
-                  {count ? <Badge variant="secondary">{count}</Badge> : null}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+        <FolderTreePanel
+          folders={nav}
+          driveId={settings.drive_id}
+          currentKey={active?.sp_item_id || `db-${active?.id ?? 0}`}
+          shareCounts={shareCounts}
+          onOpen={(folder) => setActive(folder)}
+        />
       </Card>
 
       <Card className="gap-4 p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{t("sp.accessPanel")}</p>
-            <h2 className="mt-1 font-display text-xl font-semibold tracking-tight">{active?.name ?? t("sp.wholeLibrary")}</h2>
-            <p className="text-sm text-muted-foreground">
-              {t("sp.accessThisFolder")} · {t("sp.sharedWith", { n: sharedClients.length })}
-            </p>
-          </div>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{t("sp.accessPanel")}</p>
+          <h2 className="mt-1 font-display text-xl font-semibold tracking-tight">{active?.name ?? t("sp.wholeLibrary")}</h2>
+          <p className="text-sm text-muted-foreground">
+            {t("sp.accessThisFolder")} · {t("sp.sharedWith", { n: sharedClients.length })}
+          </p>
         </div>
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
         {sharedClients.length ? (
