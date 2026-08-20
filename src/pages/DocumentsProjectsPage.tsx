@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Building2, ChevronRight, FolderKanban, Plus, Search } from "lucide-react";
+import { Building2, ChevronDown, ChevronRight, FolderKanban, Plus, Search } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { db, schema } from "../db";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
