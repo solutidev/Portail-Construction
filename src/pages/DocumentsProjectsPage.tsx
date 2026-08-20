@@ -131,54 +131,65 @@ export function DocumentsProjectsPage() {
       {groups.length === 0 ? (
         <p className="py-10 text-center text-sm text-muted-foreground">{t("sp.projectsEmpty")}</p>
       ) : (
-        <div className="space-y-4">
-          {groups.map(({ client, jobs }: { client: Client; jobs: Project[] }) => (
-            <Card key={client.id} className="gap-0 overflow-hidden p-0">
-              <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
-                <div className="flex min-w-0 items-center gap-2">
-                  <Building2 className="size-4 shrink-0 text-muted-foreground" />
-                  <div className="min-w-0">
-                    <p className="truncate font-medium">{client.company_name}</p>
-                    <p className="text-xs text-muted-foreground">{t("sp.projectCount", { n: jobs.length })}</p>
-                  </div>
+        <div className="space-y-3">
+          {groups.map(({ client, jobs }: { client: Client; jobs: Project[] }) => {
+            const isOpen = !collapsed[client.id];
+            return (
+              <Card key={client.id} className="gap-0 overflow-hidden p-0">
+                <div className="flex items-center gap-1 border-b pr-2">
+                  <button
+                    type="button"
+                    className="flex min-w-0 flex-1 items-center gap-2 px-3 py-3 text-left hover:bg-muted/40"
+                    onClick={() => setCollapsed((prev) => ({ ...prev, [client.id]: !prev[client.id] }))}
+                    aria-expanded={isOpen}
+                  >
+                    <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground transition-transform", !isOpen && "-rotate-90")} />
+                    <Building2 className="size-4 shrink-0 text-muted-foreground" />
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{client.company_name}</p>
+                      <p className="text-xs text-muted-foreground">{t("sp.projectCount", { n: jobs.length })}</p>
+                    </div>
+                  </button>
+                  <Button variant="ghost" size="sm" asChild>
+                    <Link to={`/clients/${client.id}`}>
+                      {t("dash.viewAll")}
+                      <ChevronRight className="size-4" />
+                    </Link>
+                  </Button>
                 </div>
-                <Button variant="ghost" size="sm" asChild>
-                  <Link to={`/clients/${client.id}`}>
-                    {t("dash.viewAll")}
-                    <ChevronRight className="size-4" />
-                  </Link>
-                </Button>
-              </div>
-              {jobs.length === 0 ? (
-                <p className="px-4 py-6 text-sm text-muted-foreground">{t("nav.noProjectsYet")}</p>
-              ) : (
-                <ul className="divide-y">
-                  {jobs.map((job) => (
-                    <li key={job.id}>
-                      <Link
-                        to={projectSectionPath(job.id, "documents")}
-                        className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/50"
-                      >
-                        <FolderKanban className="size-4 shrink-0 text-muted-foreground" />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="truncate font-medium">{job.name}</p>
-                            <StatusBadge value={job.status} />
-                          </div>
-                          <p className="truncate text-xs text-muted-foreground">
-                            {job.project_number}
-                            {job.city ? ` · ${job.city}` : ""}
-                          </p>
-                        </div>
-                        <span className="hidden text-xs text-muted-foreground sm:inline">{t("sp.openDocs")}</span>
-                        <ChevronRight className="size-4 text-muted-foreground" />
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Card>
-          ))}
+                {isOpen ? (
+                  jobs.length === 0 ? (
+                    <p className="px-4 py-6 text-sm text-muted-foreground">{t("nav.noProjectsYet")}</p>
+                  ) : (
+                    <ul className="divide-y">
+                      {jobs.map((job) => (
+                        <li key={job.id}>
+                          <Link
+                            to={projectSectionPath(job.id, "documents")}
+                            className="flex items-center gap-3 py-3 pr-4 pl-10 transition-colors hover:bg-muted/50"
+                          >
+                            <FolderKanban className="size-4 shrink-0 text-muted-foreground" />
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="truncate font-medium">{job.name}</p>
+                                <StatusBadge value={job.status} />
+                              </div>
+                              <p className="truncate text-xs text-muted-foreground">
+                                {job.project_number}
+                                {job.city ? ` · ${job.city}` : ""}
+                              </p>
+                            </div>
+                            <span className="hidden text-xs text-muted-foreground sm:inline">{t("sp.openDocs")}</span>
+                            <ChevronRight className="size-4 text-muted-foreground" />
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  )
+                ) : null}
+              </Card>
+            );
+          })}
         </div>
       )}
 
