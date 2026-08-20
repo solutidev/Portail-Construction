@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { desc, eq, inArray } from "drizzle-orm";
+import { desc, inArray } from "drizzle-orm";
 import {
   ArrowDown,
   ArrowUp,
@@ -28,10 +28,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { NumberTicker } from "@/components/ui/number-ticker";
 import { BlurFade } from "@/components/ui/blur-fade";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PortfolioCalendar, PortfolioGantt, marksFromPortfolio } from "@/components/PortfolioCalendar";
 import { money, formatDateTime, percent } from "@/lib/format";
 import { useI18n } from "@/lib/i18n";
 import type { MessageKey } from "@/lib/i18n/en";
 import type { Client, Project } from "@/lib/types";
+import { getAccessibleClientIds } from "@/lib/access";
 import {
   DEFAULT_DASHBOARD,
   loadDashboardLayout,
@@ -41,6 +44,10 @@ import {
 } from "@/lib/dashboard-layout";
 
 type Activity = typeof schema.activities.$inferSelect;
+type CalEvent = { id: number; event_date: string; title: string; event_type: string; project_id: number };
+type CalTask = { id: number; end_date: string | null; title: string; project_id: number };
+type CalRfi = { id: number; due_date: string | null; number: string; title: string; project_id: number };
+type CalPunch = { id: number; due_date: string | null; title: string; project_id: number };
 
 export function DashboardPage() {
   const { user, can } = useAuth();
@@ -53,6 +60,11 @@ export function DashboardPage() {
   const [openRfis, setOpenRfis] = useState(0);
   const [openPunch, setOpenPunch] = useState(0);
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [events, setEvents] = useState<CalEvent[]>([]);
+  const [tasks, setTasks] = useState<CalTask[]>([]);
+  const [rfiItems, setRfiItems] = useState<CalRfi[]>([]);
+  const [punchItems, setPunchItems] = useState<CalPunch[]>([]);
+  const [calendarFilter, setCalendarFilter] = useState("all");
 
   useEffect(() => {
     setLayout(loadDashboardLayout(user?.id));
@@ -65,48 +77,39 @@ export function DashboardPage() {
         await dbReady;
         const allClients = (await db.select().from(schema.clients)) as Client[];
         const allProjects = (await db.select().from(schema.projects)) as Project[];
-
-        let visibleClients = allClients;
-        let visibleProjects = allProjects;
-
-        if (user && !user.is_admin && user.user_type === "external") {
-          const links = await db
-            .select()
-            .from(schema.client_users)
-            .where(eq(schema.client_users.user_id, user.id));
-          const ids = new Set(links.map((l) => l.client_id));
-          visibleClients = allClients.filter((c) => ids.has(c.id));
-          visibleProjects = allProjects.filter((p) => ids.has(p.client_id));
-        }
-
+        const allowed = await getAccessibleClientIds(user);
+        const visibleClients = allowed ? allClients.filter((c) => allowed.includes(c.id)) : allClients;
+        const visibleProjects = allowed ? allProjects.filter((p) => allowed.includes(p.client_id)) : allProjects;
         const projectIds = visibleProjects.map((p) => p.id);
+
         let rfis = 0;
         let punch = 0;
+        let eventRows: CalEvent[] = [];
+        let taskRows: CalTask[] = [];
+        let rfiDue: CalRfi[] = [];
+        let punchDue: CalPunch[] = [];
         if (projectIds.length) {
-          const rfiRows = await db
-            .select()
-            .from(schema.rfis)
-            .where(inArray(schema.rfis.project_id, projectIds));
+          const rfiRows = await db.select().from(schema.rfis).where(inArray(schema.rfis.project_id, projectIds));
           rfis = rfiRows.filter((r) => r.status === "open").length;
-          const punchRows = await db
-            .select()
-            .from(schema.punch_items)
-            .where(inArray(schema.punch_items.project_id, projectIds));
+          const punchRows = await db.select().from(schema.punch_items).where(inArray(schema.punch_items.project_id, projectIds));
           punch = punchRows.filter((r) => r.status !== "complete").length;
+          eventRows = (await db.select().from(schema.calendar_events).where(inArray(schema.calendar_events.project_id, projectIds))) as CalEvent[];
+          taskRows = (await db.select().from(schema.project_tasks).where(inArray(schema.project_tasks.project_id, projectIds))) as CalTask[];
+          rfiDue = rfiRows as CalRfi[];
+          punchDue = punchRows as CalPunch[];
         }
 
-        const acts = await db
-          .select()
-          .from(schema.activities)
-          .orderBy(desc(schema.activities.created_at))
-          .limit(8);
-
+        const acts = await db.select().from(schema.activities).orderBy(desc(schema.activities.created_at)).limit(8);
         if (!cancelled) {
           setClients(visibleClients);
           setProjects(visibleProjects);
           setOpenRfis(rfis);
           setOpenPunch(punch);
           setActivities(acts);
+          setEvents(eventRows);
+          setTasks(taskRows);
+          setRfiItems(rfiDue);
+          setPunchItems(punchDue);
         }
       } catch (err) {
         console.error("dashboard load failed", err);
@@ -138,11 +141,7 @@ export function DashboardPage() {
     persist(layout.map((w) => (w.id === id ? { ...w, visible: !w.visible } : w)));
   }
 
-  const widgets = useMemo(
-    () => (editing ? layout : layout.filter((w) => w.visible)),
-    [editing, layout],
-  );
-
+  const widgets = useMemo(() => (editing ? layout : layout.filter((w) => w.visible)), [editing, layout]);
   if (loading) return <PageSkeleton />;
 
   const active = projects.filter((p) => p.status === "active");
@@ -160,9 +159,7 @@ export function DashboardPage() {
     can("dashboard", "view") || user?.is_admin ? { to: "/projects", label: t("nav.projects"), icon: FolderKanban } : null,
     { to: "/documents", label: t("nav.documents"), icon: FileText },
     { to: "/tools/punch", label: t("nav.punch"), icon: Timer },
-    user?.is_admin || can("billing", "view")
-      ? { to: "/accounting/billing", label: t("nav.billing"), icon: Receipt }
-      : null,
+    user?.is_admin || can("billing", "view") ? { to: "/accounting/billing", label: t("nav.billing"), icon: Receipt } : null,
     { to: "/tools/timesheets", label: t("nav.timesheets"), icon: CalendarDays },
   ].filter(Boolean) as { to: string; label: string; icon: typeof Building2 }[];
 
@@ -171,31 +168,10 @@ export function DashboardPage() {
       return (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {[
-            {
-              label: t("dash.stat.activeJobs"),
-              value: active.length,
-              hint: t("dash.stat.total", { n: projects.length }),
-              icon: FolderKanban,
-            },
-            {
-              label: t("dash.stat.clients"),
-              value: clients.filter((c) => c.status === "active").length,
-              hint: t("dash.stat.onFile", { n: clients.length }),
-              icon: Building2,
-            },
-            {
-              label: t("dash.stat.openRfis"),
-              value: openRfis,
-              hint: t("dash.stat.punchOpen", { n: openPunch }),
-              icon: TriangleAlert,
-            },
-            {
-              label: t("dash.stat.portfolioSpend"),
-              value: spent,
-              hint: t("dash.stat.ofBudget", { pct: percent(spent, budget), amount: money(budget, locale) }),
-              icon: Wallet,
-              money: true,
-            },
+            { label: t("dash.stat.activeJobs"), value: active.length, hint: t("dash.stat.total", { n: projects.length }), icon: FolderKanban },
+            { label: t("dash.stat.clients"), value: clients.filter((c) => c.status === "active").length, hint: t("dash.stat.onFile", { n: clients.length }), icon: Building2 },
+            { label: t("dash.stat.openRfis"), value: openRfis, hint: t("dash.stat.punchOpen", { n: openPunch }), icon: TriangleAlert },
+            { label: t("dash.stat.portfolioSpend"), value: spent, hint: t("dash.stat.ofBudget", { pct: percent(spent, budget), amount: money(budget, locale) }), icon: Wallet, money: true },
           ].map((stat, i) => (
             <BlurFade key={stat.label} delay={0.04 * i}>
               <Card className="gap-3 py-5">
@@ -224,6 +200,43 @@ export function DashboardPage() {
       );
     }
 
+    if (id === "calendar") {
+      const filteredProjects = calendarFilter === "all" ? projects : projects.filter((p) => String(p.id) === calendarFilter);
+      const marks = marksFromPortfolio(
+        filteredProjects,
+        events.filter((e) => filteredProjects.some((p) => p.id === e.project_id)),
+        tasks.filter((e) => filteredProjects.some((p) => p.id === e.project_id)),
+        rfiItems.filter((e) => filteredProjects.some((p) => p.id === e.project_id)),
+        punchItems.filter((e) => filteredProjects.some((p) => p.id === e.project_id)),
+      );
+      return (
+        <Card className="gap-4 p-5">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium">{t("dash.calendarFilter")}</p>
+              <p className="text-xs text-muted-foreground">{t("dash.ganttHint")}</p>
+            </div>
+            <Select value={calendarFilter} onValueChange={setCalendarFilter}>
+              <SelectTrigger className="w-64">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t("dash.calendarAll")}</SelectItem>
+                {projects.map((p) => (
+                  <SelectItem key={p.id} value={String(p.id)}>
+                    {p.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <PortfolioCalendar marks={marks} />
+        </Card>
+      );
+    }
+
+    if (id === "gantt") return <PortfolioGantt projects={projects} />;
+
     if (id === "clients") {
       return (
         <Card className="py-0">
@@ -244,10 +257,7 @@ export function DashboardPage() {
                   const jobs = projects.filter((p) => p.client_id === c.id);
                   return (
                     <li key={c.id}>
-                      <Link
-                        to={`/clients/${c.id}`}
-                        className="flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-muted/50"
-                      >
+                      <Link to={`/clients/${c.id}`} className="flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-muted/50">
                         <Building2 className="size-4 shrink-0 text-muted-foreground" />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
@@ -291,10 +301,7 @@ export function DashboardPage() {
                   const used = percent(p.spent, p.budget);
                   return (
                     <li key={p.id}>
-                      <Link
-                        to={`/projects/${p.id}`}
-                        className="flex items-center gap-4 px-5 py-3.5 transition-colors hover:bg-muted/50"
-                      >
+                      <Link to={`/projects/${p.id}`} className="flex items-center gap-4 px-5 py-3.5 transition-colors hover:bg-muted/50">
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
                             <p className="truncate font-medium">{p.name}</p>
@@ -310,10 +317,7 @@ export function DashboardPage() {
                             <span>{used}%</span>
                           </div>
                           <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                            <div
-                              className="h-full rounded-full bg-primary"
-                              style={{ width: `${Math.min(used, 100)}%` }}
-                            />
+                            <div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(used, 100)}%` }} />
                           </div>
                         </div>
                       </Link>
@@ -338,11 +342,7 @@ export function DashboardPage() {
           </CardHeader>
           <CardContent className="grid gap-2 p-4 sm:grid-cols-2 xl:grid-cols-3">
             {shortcuts.map((item) => (
-              <Link
-                key={item.to}
-                to={item.to}
-                className="flex items-center gap-3 rounded-sm border border-border px-3 py-3 text-sm transition-colors hover:border-primary/40 hover:bg-muted/50"
-              >
+              <Link key={item.to} to={item.to} className="flex items-center gap-3 rounded-sm border border-border px-3 py-3 text-sm transition-colors hover:border-primary/40 hover:bg-muted/50">
                 <item.icon className="size-4 text-muted-foreground" />
                 <span className="font-medium">{item.label}</span>
               </Link>
@@ -366,9 +366,7 @@ export function DashboardPage() {
                 <li key={a.id} className="relative pl-5">
                   <span className="absolute top-1.5 left-0 size-2 rounded-full bg-primary/70" />
                   <p className="text-sm capitalize">
-                    {t(`activity.${a.action}` as MessageKey) === `activity.${a.action}`
-                      ? a.action
-                      : t(`activity.${a.action}` as MessageKey)}
+                    {t(`activity.${a.action}` as MessageKey) === `activity.${a.action}` ? a.action : t(`activity.${a.action}` as MessageKey)}
                   </p>
                   {a.details && <p className="text-xs text-muted-foreground">{a.details}</p>}
                   <p className="mt-0.5 text-[11px] text-muted-foreground">{formatDateTime(a.created_at)}</p>
@@ -386,13 +384,7 @@ export function DashboardPage() {
       <PageHeader
         eyebrow={t("dash.eyebrow")}
         title={`${greeting}, ${user?.name.split(" ")[0]}`}
-        description={
-          editing
-            ? t("dash.customizeHint")
-            : user?.user_type === "external"
-              ? t("dash.desc.external")
-              : t("dash.desc.internal")
-        }
+        description={editing ? t("dash.customizeHint") : user?.user_type === "external" ? t("dash.desc.external") : t("dash.desc.internal")}
         actions={
           <div className="flex flex-wrap gap-2">
             {editing ? (
@@ -414,52 +406,27 @@ export function DashboardPage() {
           </div>
         }
       />
-
       <div className="grid gap-6">
         {widgets.map((widget, index) => (
-          <section
-            key={widget.id}
-            className={editing ? "rounded-sm border border-dashed border-border p-3" : undefined}
-          >
+          <section key={widget.id} className={editing ? "rounded-sm border border-dashed border-border p-3" : undefined}>
             {editing ? (
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm font-medium">{t(`dash.widget.${widget.id}` as MessageKey)}</p>
                 <div className="flex gap-1">
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    disabled={index === 0}
-                    onClick={() => moveWidget(widget.id, -1)}
-                    aria-label={t("dash.moveUp")}
-                  >
+                  <Button type="button" size="icon" variant="ghost" disabled={index === 0} onClick={() => moveWidget(widget.id, -1)} aria-label={t("dash.moveUp")}>
                     <ArrowUp className="size-4" />
                   </Button>
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    disabled={index === widgets.length - 1}
-                    onClick={() => moveWidget(widget.id, 1)}
-                    aria-label={t("dash.moveDown")}
-                  >
+                  <Button type="button" size="icon" variant="ghost" disabled={index === widgets.length - 1} onClick={() => moveWidget(widget.id, 1)} aria-label={t("dash.moveDown")}>
                     <ArrowDown className="size-4" />
                   </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => toggleWidget(widget.id)}
-                  >
+                  <Button type="button" size="sm" variant="outline" onClick={() => toggleWidget(widget.id)}>
                     {widget.visible ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
                     {widget.visible ? t("dash.hide") : t("dash.show")}
                   </Button>
                 </div>
               </div>
             ) : null}
-            <div className={editing && !widget.visible ? "pointer-events-none opacity-40" : undefined}>
-              {renderWidget(widget.id)}
-            </div>
+            <div className={editing && !widget.visible ? "pointer-events-none opacity-40" : undefined}>{renderWidget(widget.id)}</div>
           </section>
         ))}
       </div>

@@ -47,7 +47,7 @@ export async function callSharePoint<T>(
 }
 
 export function canManageLibrary(user: SessionUser | null) {
-  return Boolean(user && user.is_active && (user.is_admin || user.user_type === "internal") && user.view_as !== "client");
+  return Boolean(user && user.is_active && user.is_admin && user.view_as !== "client");
 }
 
 export async function loadProjectFolders(projectId: number) {
@@ -77,8 +77,11 @@ export function foldersVisibleTo(
   clientId: number | null,
 ) {
   if (!user) return [];
-  if (canManageLibrary(user)) return folders;
-  if (!clientId) return [];
+  if (user.is_admin && user.view_as !== "client") return folders;
+  if (!clientId) {
+    const allowed = new Set(shares.filter((s) => s.can_view && s.folder_id !== 0).map((s) => s.folder_id));
+    return folders.filter((f) => allowed.has(f.id));
+  }
   const allowed = new Set(
     shares.filter((s) => s.client_id === clientId && s.can_view && s.folder_id !== 0).map((s) => s.folder_id),
   );

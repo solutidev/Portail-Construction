@@ -1,6 +1,6 @@
 import { DASHBOARD_LAYOUT_KEY } from "./constants";
 
-export const DASHBOARD_WIDGETS = ["stats", "clients", "projects", "modules", "activity"] as const;
+export const DASHBOARD_WIDGETS = ["stats", "calendar", "gantt", "clients", "projects", "modules", "activity"] as const;
 export type DashboardWidgetId = (typeof DASHBOARD_WIDGETS)[number];
 
 export type DashboardWidget = {
@@ -10,6 +10,8 @@ export type DashboardWidget = {
 
 export const DEFAULT_DASHBOARD: DashboardWidget[] = [
   { id: "stats", visible: true },
+  { id: "calendar", visible: true },
+  { id: "gantt", visible: true },
   { id: "clients", visible: true },
   { id: "projects", visible: true },
   { id: "modules", visible: true },
@@ -35,7 +37,7 @@ export function loadDashboardLayout(userId?: number): DashboardWidget[] {
       next.push({ id: item.id, visible: Boolean(item.visible) });
     }
     for (const id of DASHBOARD_WIDGETS) {
-      if (!seen.has(id)) next.push({ id, visible: true });
+      if (!seen.has(id)) next.push({ id, visible: id !== "gantt" ? true : true });
     }
     return next;
   } catch {

@@ -93,6 +93,13 @@ export const fr: Record<MessageKey, string> = {
   "dash.widget.projects": "Projets",
   "dash.widget.activity": "Activité récente",
   "dash.widget.modules": "Raccourcis modules",
+  "dash.widget.calendar": "Calendrier des projets",
+  "dash.widget.gantt": "Échéancier",
+  "dash.calendar": "Calendrier des projets",
+  "dash.calendarFilter": "Afficher les projets",
+  "dash.calendarAll": "Tous les projets visibles",
+  "dash.gantt": "Échéancier des projets",
+  "dash.ganttHint": "Dates de début et de fin des chantiers auxquels vous avez accès.",
   "dash.noClients": "Aucun client en vue.",
   "dash.modulesHint": "Accédez aux outils que vous utilisez le plus.",
 

@@ -110,15 +110,15 @@ export function SharePointLibrary({
     }
     return list;
   }, [folders, shares, user, client, projectId, scopeProjectIds, manager]);
+  const showRoot = Boolean(
+    libraryRoot &&
+      projectId === 0 &&
+      user?.is_admin &&
+      user.view_as !== "client",
+  );
   const showRootForClient = Boolean(libraryRoot && clientHasRootShare(shares, client?.id ?? null) && projectId === 0);
   const navFolders: BrowseFolder[] =
-    projectId !== 0
-      ? visible
-      : manager && libraryRoot
-        ? [libraryRoot, ...visible]
-        : showRootForClient && libraryRoot
-          ? [libraryRoot, ...visible]
-          : visible;
+    projectId !== 0 ? visible : showRoot && libraryRoot ? [libraryRoot, ...visible] : showRootForClient && libraryRoot ? [libraryRoot, ...visible] : visible;
   const filteredNav = useMemo(() => {
     const q = folderQuery.trim().toLowerCase();
     if (!q) return navFolders;
