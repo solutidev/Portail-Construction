@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   CheckSquare,
+  ChevronDown,
   ChevronRight,
   Copy,
   Download,
@@ -9,6 +10,7 @@ import {
   FolderOpen,
   FolderPlus,
   Pencil,
+  Search,
   Share2,
   Trash2,
   Upload,
@@ -87,6 +89,7 @@ export function SharePointLibrary({
   const [newName, setNewName] = useState("");
   const [folderDialog, setFolderDialog] = useState(false);
   const [clientQuery, setClientQuery] = useState("");
+  const [accessOpen, setAccessOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [shareTarget, setShareTarget] = useState<{ folderId: number; itemId: string; name: string } | null>(null);
   const [renameTarget, setRenameTarget] = useState<ItemTarget | null>(null);
@@ -504,19 +507,41 @@ export function SharePointLibrary({
     <div className="space-y-3">
       {manager && !compact ? (
         <Card className="gap-3 p-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{t("sp.accessPanel")}</p>
-              <p className="mt-1 text-sm font-medium">{accessName}</p>
-              <p className="text-xs text-muted-foreground">
-                {accessItemId ? t("sp.accessThisFile") : t("sp.accessThisFolder")} · {t("sp.sharedWith", { n: sharedCount })}
-              </p>
-            </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              className="flex min-w-0 flex-1 items-start gap-2 text-left"
+              onClick={() => setAccessOpen((open) => !open)}
+              aria-expanded={accessOpen || Boolean(clientQuery.trim())}
+            >
+              <ChevronDown
+                className={`mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform ${
+                  accessOpen || clientQuery.trim() ? "" : "-rotate-90"
+                }`}
+              />
+              <span className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{t("sp.accessPanel")}</p>
+                <p className="mt-1 text-sm font-medium">{accessName}</p>
+                <p className="text-xs text-muted-foreground">
+                  {accessItemId ? t("sp.accessThisFile") : t("sp.accessThisFolder")} · {t("sp.sharedWith", { n: sharedCount })}
+                </p>
+              </span>
+            </button>
             <div className="relative w-full max-w-xs">
-              <Input value={clientQuery} onChange={(e) => setClientQuery(e.target.value)} placeholder={t("sp.searchClients")} />
+              <Search className="pointer-events-none absolute top-2.5 left-2.5 size-4 text-muted-foreground" />
+              <Input
+                className="pl-8"
+                value={clientQuery}
+                onChange={(e) => {
+                  setClientQuery(e.target.value);
+                  if (e.target.value.trim()) setAccessOpen(true);
+                }}
+                onFocus={() => setAccessOpen(true)}
+                placeholder={t("sp.searchClients")}
+              />
             </div>
           </div>
-          {filteredClients.length === 0 ? (
+          {accessOpen || clientQuery.trim() ? filteredClients.length === 0 ? (
             <p className="text-sm text-muted-foreground">{t("sp.noClients")}</p>
           ) : (
             <div className="overflow-x-auto">
@@ -567,7 +592,7 @@ export function SharePointLibrary({
                 </tbody>
               </table>
             </div>
-          )}
+          ) : null}
         </Card>
       ) : null}
       <div>
