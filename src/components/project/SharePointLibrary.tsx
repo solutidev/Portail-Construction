@@ -59,7 +59,7 @@ type ItemTarget = {
 
 export function SharePointLibrary({
   projectId,
-  projectName,
+  projectName: _projectName,
   client,
   canCreate,
   compact = false,
@@ -80,12 +80,14 @@ export function SharePointLibrary({
   const [folders, setFolders] = useState<SharePointFolder[]>([]);
   const [shares, setShares] = useState<SharePointShare[]>([]);
   const [activeId, setActiveId] = useState<number | null>(null);
+  const [browse, setBrowse] = useState<{ id: string; name: string } | null>(null);
+  const [trail, setTrail] = useState<{ id: string; name: string }[]>([]);
   const [items, setItems] = useState<SpItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
-  const [folderQuery, setFolderQuery] = useState("");
+  const [folderDialog, setFolderDialog] = useState(false);
   const [clientQuery, setClientQuery] = useState("");
   const [shareOpen, setShareOpen] = useState(false);
   const [shareTarget, setShareTarget] = useState<{ folderId: number; itemId: string; name: string } | null>(null);
@@ -119,29 +121,11 @@ export function SharePointLibrary({
   const showRootForClient = Boolean(libraryRoot && clientHasRootShare(shares, client?.id ?? null) && projectId === 0);
   const navFolders: BrowseFolder[] =
     projectId !== 0 ? visible : showRoot && libraryRoot ? [libraryRoot, ...visible] : showRootForClient && libraryRoot ? [libraryRoot, ...visible] : visible;
-  const filteredNav = useMemo(() => {
-    const q = folderQuery.trim().toLowerCase();
-    if (!q) return navFolders;
-    return navFolders.filter((folder) => folder.name.toLowerCase().includes(q) || folder.path.toLowerCase().includes(q));
-  }, [navFolders, folderQuery]);
   const active = navFolders.find((f) => f.id === activeId) ?? navFolders[0] ?? null;
   const folderShare = active && active.id && client ? shareFor(shares, active.id, client.id, "") : null;
   const canUpload = Boolean(manager || (canCreate && folderShare?.can_upload && active && active.id !== 0));
   const canEditFolder = Boolean(manager || folderShare?.can_edit);
-  const crumbs: { label: string; folder: BrowseFolder | null }[] = (() => {
-    if (!active) return [];
-    if (active.id === 0) return [{ label: active.name, folder: active }];
-    const parts = active.path.split("/").filter(Boolean);
-    const trail: { label: string; folder: BrowseFolder | null }[] = [];
-    if (libraryRoot) trail.push({ label: t("sp.crumbRoot"), folder: libraryRoot });
-    let acc = "";
-    parts.forEach((part, index) => {
-      acc = acc ? `${acc}/${part}` : part;
-      const match = folders.find((f) => f.path === acc || f.name === part);
-      trail.push({ label: part, folder: index === parts.length - 1 ? active : match ?? null });
-    });
-    return trail;
-  })();
+  const crumbs = [{ id: "", name: active?.name ?? t("project.nav.documents") }, ...trail];
 
   const visibleItems = useMemo(() => {
     if (!active) return [];
@@ -165,15 +149,40 @@ export function SharePointLibrary({
     return { nextFolders, nextShares };
   }
 
-  async function loadItems(folder: BrowseFolder, driveFallback?: string) {
+  async function loadItems(folder: BrowseFolder, driveFallback?: string, itemId?: string) {
     const data = await callSharePoint<{ items: SpItem[]; driveId?: string }>("list", {
       driveId: folder.sp_drive_id || driveFallback || "",
-      itemId: folder.sp_item_id || undefined,
+      itemId: itemId || folder.sp_item_id || undefined,
     });
     setItems(data.items);
     if (data.driveId && settings && !settings.drive_id) {
       setSettings({ ...settings, drive_id: data.driveId });
     }
+  }
+
+  function openRoot(folder: BrowseFolder) {
+    setActiveId(folder.id);
+    setBrowse(null);
+    setTrail([]);
+    setSelected([]);
+  }
+
+  function openChild(item: SpItem) {
+    if (!item.isFolder) return;
+    setTrail((prev) => [...prev, { id: item.id, name: item.name }]);
+    setBrowse({ id: item.id, name: item.name });
+    setSelected([]);
+  }
+
+  function goToCrumb(index: number) {
+    if (index <= 0) {
+      setBrowse(null);
+      setTrail([]);
+      return;
+    }
+    const next = trail.slice(0, index);
+    setTrail(next);
+    setBrowse(next[next.length - 1] ?? null);
   }
 
   useEffect(() => {
@@ -186,10 +195,16 @@ export function SharePointLibrary({
           setItems([]);
           return;
         }
-        const first = manager
-          ? { id: 0 as const }
-          : foldersVisibleTo(nextFolders, nextShares, user, client?.id ?? null)[0];
+        const visibleNow = foldersVisibleTo(nextFolders, nextShares, user, client?.id ?? null);
+        const first =
+          projectId !== 0
+            ? visibleNow[0] ?? nextFolders[0]
+            : manager && libraryRoot
+              ? { id: 0 as const }
+              : visibleNow[0];
         if (first) setActiveId(first.id);
+        setBrowse(null);
+        setTrail([]);
       } catch (err) {
         setError(err instanceof Error ? err.message : "SharePoint error");
       } finally {
@@ -218,7 +233,7 @@ export function SharePointLibrary({
     try {
       const created = await callSharePoint<{ driveId: string; folder: { id: string; name: string } }>("mkdir", {
         name: newName.trim(),
-        parentId: active && active.id !== 0 ? active.sp_item_id : undefined,
+        parentId: browse?.id || (active && active.id !== 0 ? active.sp_item_id : undefined),
       });
       const parentPath = active && active.id !== 0 ? active.path.replace(/^\//, "") : "";
       await db.insert(schema.sharepoint_folders).values({
@@ -229,9 +244,9 @@ export function SharePointLibrary({
         path: parentPath ? `${parentPath}/${created.folder.name}` : created.folder.name,
       });
       setNewName("");
-      const { nextFolders } = await reloadMeta();
-      const just = nextFolders.find((f) => f.sp_item_id === created.folder.id);
-      if (just) setActiveId(just.id);
+      setFolderDialog(false);
+      await reloadMeta();
+      if (active) await loadItems(active, settings?.drive_id, browse?.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create folder");
     } finally {
@@ -260,7 +275,7 @@ export function SharePointLibrary({
       }
       setRenameTarget(null);
       await reloadMeta();
-      if (active) await loadItems(active);
+      if (active) await loadItems(active, settings?.drive_id, browse?.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not rename");
     } finally {
@@ -286,9 +301,13 @@ export function SharePointLibrary({
       else await deleteItemShares(deleteTarget.itemId);
       setDeleteTarget(null);
       setSelected((prev) => prev.filter((id) => id !== deleteTarget.itemId));
-      if (deleteTarget.kind === "folder" && deleteTarget.id === active?.id) setActiveId(0);
+      if (deleteTarget.kind === "folder" && deleteTarget.id === active?.id) {
+        setActiveId(navFolders[0]?.id ?? 0);
+        setBrowse(null);
+        setTrail([]);
+      }
       await reloadMeta();
-      if (active) await loadItems(active);
+      if (active) await loadItems(active, settings?.drive_id, browse?.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not delete");
     } finally {
@@ -370,7 +389,12 @@ export function SharePointLibrary({
   }
 
   async function onUpload(file: File) {
-    if (!active || active.id === 0) return;
+    if (!active) return;
+    const parentId = browse?.id || (active.id !== 0 ? active.sp_item_id : "");
+    if (!parentId) {
+      setError(t("sp.pickFolder"));
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -381,12 +405,12 @@ export function SharePointLibrary({
         binary += String.fromCharCode(b);
       });
       await callSharePoint("upload", {
-        driveId: active.sp_drive_id,
-        parentId: active.sp_item_id,
+        driveId: active.sp_drive_id || settings?.drive_id,
+        parentId,
         name: file.name,
         content: btoa(binary),
       });
-      await loadItems(active);
+      await loadItems(active, settings?.drive_id, browse?.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
     } finally {
@@ -475,95 +499,55 @@ export function SharePointLibrary({
   const accessName = shareTarget?.name ?? active?.name ?? t("sp.wholeLibrary");
   const sharedCount = clients.filter((c) => Boolean(shareFor(shares, accessFolderId, c.id, accessItemId)?.can_view)).length;
 
-  return (
-    <div className={compact ? "space-y-3" : "grid gap-4 xl:grid-cols-[260px_minmax(0,1fr)_300px]"}>
-      <Card className="gap-3 p-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{t("sp.folders")}</p>
-          <p className="mt-1 text-xs text-muted-foreground">{t("sp.browseHint")}</p>
-        </div>
-        <Input value={folderQuery} onChange={(e) => setFolderQuery(e.target.value)} placeholder={t("sp.searchFolders")} />
-        {filteredNav.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{manager ? t("sp.noFoldersStaff") : t("sp.noFoldersClient")}</p>
-        ) : (
-          <ul className="max-h-[28rem] space-y-1 overflow-auto pr-1">
-            {filteredNav.map((folder) => (
-              <li key={`${folder.id}-${folder.sp_item_id}`} className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => setActiveId(folder.id)}
-                  className={`flex min-w-0 flex-1 items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sm ${
-                    active?.id === folder.id ? "bg-primary/12 font-medium text-foreground" : "hover:bg-muted"
-                  }`}
-                >
-                  {folder.id === 0 ? <Home className="size-3.5 shrink-0 opacity-70" /> : <FolderOpen className="size-3.5 shrink-0 opacity-70" />}
-                  <span className="truncate">{folder.name}</span>
-                </button>
-                {manager && folder.id !== 0 && folder.sp_item_id ? (
-                  <div className="flex">
-                    <Button
-                      size="icon-sm"
-                      variant="ghost"
-                      aria-label={t("sp.rename")}
-                      onClick={() => {
-                        setRenameTarget(asTarget(folder));
-                        setRenameValue(folder.name);
-                      }}
-                    >
-                      <Pencil className="size-4" />
-                    </Button>
-                    <Button size="icon-sm" variant="ghost" aria-label={t("sp.delete")} onClick={() => setDeleteTarget(asTarget(folder))}>
-                      <Trash2 className="size-4" />
-                    </Button>
-                  </div>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        )}
-        {manager ? (
-          <div className="space-y-2 border-t pt-3">
-            <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={t("sp.folderName")} />
-            <Button size="sm" className="w-full" disabled={busy || !newName.trim()} onClick={() => void createLinkedFolder()}>
-              <FolderPlus className="size-4" />
-              {t("sp.createFolder")}
-            </Button>
-          </div>
-        ) : null}
-      </Card>
+  const currentTitle = browse?.name || active?.name || t("project.nav.documents");
+  const canMakeHere = Boolean(manager || canUpload);
 
+  return (
+    <div className={compact ? "space-y-3" : "grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]"}>
       <div>
-        <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
-          <div className="min-w-0">
-            <nav className="mb-1 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+        <Card className="mb-3 gap-3 p-3">
+          {navFolders.length > 1 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {navFolders.map((folder) => (
+                <Button
+                  key={`${folder.id}-${folder.sp_item_id}`}
+                  size="sm"
+                  variant={active?.id === folder.id && !browse ? "default" : "outline"}
+                  onClick={() => openRoot(folder)}
+                >
+                  {folder.id === 0 ? <Home className="size-3.5" /> : <FolderOpen className="size-3.5" />}
+                  {folder.name}
+                </Button>
+              ))}
+            </div>
+          ) : null}
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" variant="outline" disabled={trail.length === 0} onClick={() => goToCrumb(trail.length - 1)}>
+              {t("sp.up")}
+            </Button>
+            <nav className="flex min-w-0 flex-1 flex-wrap items-center gap-1 text-sm">
               {crumbs.map((crumb, index) => (
-                <span key={`${crumb.label}-${index}`} className="flex items-center gap-1">
-                  {index > 0 ? <ChevronRight className="size-3" /> : null}
-                  {crumb.folder ? (
-                    <button type="button" className="hover:text-foreground" onClick={() => setActiveId(crumb.folder!.id)}>
-                      {crumb.label}
-                    </button>
-                  ) : (
-                    <span>{crumb.label}</span>
-                  )}
+                <span key={`${crumb.id}-${index}`} className="flex items-center gap-1">
+                  {index > 0 ? <ChevronRight className="size-3.5 text-muted-foreground" /> : null}
+                  <button type="button" className="max-w-[10rem] truncate hover:text-primary" onClick={() => goToCrumb(index)}>
+                    {crumb.name}
+                  </button>
                 </span>
               ))}
             </nav>
-            <h2 className="font-display text-lg font-semibold tracking-tight">{active?.name ?? t("project.nav.documents")}</h2>
-            <p className="text-xs text-muted-foreground">{t("sp.aclHint", { project: projectName })}</p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {manager && active ? (
-              <Button size="sm" variant="outline" onClick={() => openShare(active.id, "", active.name)}>
-                <Share2 className="size-4" />
-                {t("sp.shareFolder")}
+          <div className="flex flex-wrap items-center gap-2">
+            {canMakeHere ? (
+              <Button size="sm" onClick={() => setFolderDialog(true)} disabled={busy}>
+                <FolderPlus className="size-4" />
+                {t("sp.newFolder")}
               </Button>
             ) : null}
-            {canUpload && active && active.id !== 0 ? (
-              <Button size="sm" asChild disabled={busy}>
+            {canMakeHere ? (
+              <Button size="sm" variant="outline" asChild disabled={busy}>
                 <label className="cursor-pointer">
                   <Upload className="size-4" />
-                  {t("sp.upload")}
+                  {t("sp.uploadHere")}
                   <input
                     type="file"
                     className="sr-only"
@@ -576,8 +560,34 @@ export function SharePointLibrary({
                 </label>
               </Button>
             ) : null}
+            {manager && active ? (
+              <Button size="sm" variant="outline" onClick={() => openShare(active.id, "", currentTitle)}>
+                <Share2 className="size-4" />
+                {t("sp.shareFolder")}
+              </Button>
+            ) : null}
+            {manager && active && active.id !== 0 && !browse ? (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setRenameTarget(asTarget(active));
+                    setRenameValue(active.name);
+                  }}
+                >
+                  <Pencil className="size-4" />
+                  {t("sp.rename")}
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setDeleteTarget(asTarget(active))}>
+                  <Trash2 className="size-4" />
+                  {t("sp.delete")}
+                </Button>
+              </>
+            ) : null}
           </div>
-        </div>
+          <p className="text-xs text-muted-foreground">{t("sp.browseHint")}</p>
+        </Card>
         {error ? <p className="mb-3 text-sm text-destructive">{error}</p> : null}
         {manager ? (
           <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border bg-card px-3 py-2">
@@ -675,8 +685,8 @@ export function SharePointLibrary({
                     </p>
                   </button>
                   <div className="flex flex-wrap gap-2">
-                    {item.isFolder && linked ? (
-                      <Button size="sm" variant="ghost" onClick={() => setActiveId(linked.id)}>
+                    {item.isFolder ? (
+                      <Button size="sm" variant="ghost" onClick={() => openChild(item)}>
                         {t("sp.openFolder")}
                         <ChevronRight className="size-4" />
                       </Button>
@@ -801,6 +811,24 @@ export function SharePointLibrary({
           )}
         </Card>
       ) : null}
+
+      <Dialog open={folderDialog} onOpenChange={setFolderDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t("sp.newFolder")}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">{t("sp.newFolderHint")}</p>
+          <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={t("sp.folderName")} />
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setFolderDialog(false)}>
+              {t("clients.cancel")}
+            </Button>
+            <Button type="button" disabled={busy || !newName.trim()} onClick={() => void createLinkedFolder()}>
+              {t("sp.createHere")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={shareOpen} onOpenChange={setShareOpen}>
         <DialogContent className="sm:max-w-lg">
