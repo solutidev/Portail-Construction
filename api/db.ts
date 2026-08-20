@@ -1,5 +1,14 @@
 import pg from "pg";
 import { MIGRATE_SQL } from "../src/db/migrate-sql.ts";
+import { hashPassword, hashPasswordParams, verifyPassword } from "./_lib/password.ts";
+import {
+  clearSessionCookie,
+  cookieHeaderOf,
+  newSessionToken,
+  sessionCookie,
+  sessionMaxAgeSeconds,
+  tokenFromCookieHeader,
+} from "./_lib/session.ts";
 
 const { Pool } = pg;
 
@@ -17,9 +26,10 @@ function statementsOf(sql: string) {
 function databaseUrl() {
   if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
   const user = process.env.POSTGRES_USER || "frx";
-  const password = process.env.POSTGRES_PASSWORD || "frx-change-me";
+  const password = process.env.POSTGRES_PASSWORD || "";
   const db = process.env.POSTGRES_DB || "frx";
-  return `postgres://${user}:${password}@db:5432/${db}`;
+  if (!password) throw new Error("POSTGRES_PASSWORD or DATABASE_URL is required");
+  return `postgres://${user}:${encodeURIComponent(password)}@db:5432/${db}`;
 }
 
 function getPool() {
@@ -245,8 +255,12 @@ export async function loginUser(email: string, password: string) {
   );
   const row = result.rows[0] as Record<string, unknown> | undefined;
   if (!row) return { error: "login.error.invalid" };
-  if (String(row.password ?? "").trim() !== password.trim()) return { error: "login.error.invalid" };
+  const stored = String(row.password ?? "");
+  if (!verifyPassword(password.trim(), stored)) return { error: "login.error.invalid" };
   if (Number(row.is_active) !== 1) return { error: "login.error.inactive" };
+  if (!stored.startsWith("pbkdf2$")) {
+    await getPool().query("UPDATE users SET password = $2 WHERE id = $1", [row.id, hashPassword(password.trim())]);
+  }
   return {
     user: {
       id: Number(row.id),
@@ -267,7 +281,91 @@ export async function loginUser(email: string, password: string) {
   };
 }
 
-export async function handleDbRequest(req: { method?: string; body?: any }, res: any) {
+function publicUser(row: Record<string, unknown>) {
+  return {
+    id: Number(row.id),
+    name: String(row.name ?? ""),
+    email: String(row.email ?? ""),
+    user_type: String(row.user_type ?? "internal"),
+    title: row.title == null ? null : String(row.title),
+    phone: row.phone == null ? null : String(row.phone),
+    is_active: Number(row.is_active),
+    is_admin: Number(row.is_admin),
+    avatar_initials: row.avatar_initials == null ? null : String(row.avatar_initials),
+    locale: row.locale === "fr" ? "fr" : "en",
+    theme: row.theme === "dark" ? "dark" : "light",
+    all_clients: Number(row.all_clients ?? 1),
+    created_at: row.created_at,
+    password: "",
+  };
+}
+
+async function createDbSession(userId: number) {
+  const token = newSessionToken();
+  const expires = new Date(Date.now() + sessionMaxAgeSeconds() * 1000).toISOString();
+  await getPool().query("INSERT INTO sessions (token, user_id, expires_at) VALUES ($1, $2, $3)", [
+    token,
+    userId,
+    expires,
+  ]);
+  return token;
+}
+
+async function revokeDbSession(token: string | null) {
+  if (!token) return;
+  await getPool().query("DELETE FROM sessions WHERE token = $1", [token]);
+}
+
+async function revokeUserSessions(userId: number) {
+  await getPool().query("DELETE FROM sessions WHERE user_id = $1", [userId]);
+}
+
+async function loadSessionUser(req: { headers?: Record<string, unknown> }) {
+  const token = tokenFromCookieHeader(cookieHeaderOf(req));
+  if (!token) return null;
+  const result = await getPool().query(
+    `SELECT u.id, u.name, u.email, u.user_type, u.title, u.phone, u.is_active, u.is_admin,
+            u.avatar_initials, u.locale, u.theme, u.all_clients, u.created_at, s.expires_at
+     FROM sessions s
+     JOIN users u ON u.id = s.user_id
+     WHERE s.token = $1
+     LIMIT 1`,
+    [token],
+  );
+  const row = result.rows[0] as Record<string, unknown> | undefined;
+  if (!row || Number(row.is_active) !== 1) return null;
+  if (String(row.expires_at) < new Date().toISOString()) {
+    await revokeDbSession(token);
+    return null;
+  }
+  return publicUser(row);
+}
+
+function isAllowedSql(sql: string) {
+  const trimmed = sql.trim();
+  if (!trimmed) return false;
+  if (/;/.test(trimmed.replace(/;+\s*$/, ""))) return false;
+  if (/\b(drop|alter|truncate|create|grant|revoke|comment|copy|vacuum|lock|call|do)\b/i.test(trimmed)) return false;
+  if (/^\s*select\b/i.test(trimmed)) return true;
+  if (/^\s*insert\s+into\b/i.test(trimmed)) return true;
+  if (/^\s*update\b/i.test(trimmed)) return true;
+  if (/^\s*delete\s+from\b/i.test(trimmed)) return true;
+  return false;
+}
+
+function rewriteSql(sql: string) {
+  if (/^\s*select\b/i.test(sql) && /\busers\b/i.test(sql)) {
+    return sql.replace(/(?:["']?users["']?\.)?["']?password["']?(?!\s*=)/gi, "'' AS password");
+  }
+  return sql;
+}
+
+export async function requireApiUser(req: { headers?: Record<string, unknown> }) {
+  await ensureSchema();
+  return loadSessionUser(req);
+}
+
+export async function handleDbRequest(req: { method?: string; body?: any; headers?: Record<string, unknown> }, res: any) {
   const action = String(req.body?.action ?? "");
   try {
     if (action === "ping" || req.method === "GET") {
@@ -282,7 +380,24 @@ export async function handleDbRequest(req: { method?: string; body?: any }, res:
     }
     if (action === "login") {
       const result = await loginUser(String(req.body?.email ?? ""), String(req.body?.password ?? ""));
+      if ("user" in result && result.user) {
+        res.setHeader?.("Set-Cookie", sessionCookie(Number(result.user.id)));
+      }
       return res.status(200).json(result);
+    }
+    if (action === "logout") {
+      res.setHeader?.("Set-Cookie", clearSessionCookie());
+      return res.status(200).json({ ok: true });
+    }
+    if (action === "session") {
+      await ensureSchema();
+      const user = await loadSessionUser(req);
+      return res.status(200).json({ user });
+    }
+    const session = await loadSessionUser(req);
+    if (!session) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
     }
     const sql = String(req.body?.sql ?? "");
     const params = Array.isArray(req.body?.params) ? req.body.params : [];
@@ -290,7 +405,14 @@ export async function handleDbRequest(req: { method?: string; body?: any }, res:
       res.status(400).json({ error: "sql is required" });
       return;
     }
-    const { rows } = await runSql(sql, params);
+    const mutating = /^\s*(insert|update|delete|alter|drop|truncate|create|grant|revoke)\b/i.test(sql);
+    const sensitive =
+      /\b(users|user_permissions|access_groups|access_group_permissions|user_access_groups|app_settings)\b/i.test(sql);
+    if (mutating && sensitive && Number(session.is_admin) !== 1) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+    const { rows } = await runSql(rewriteSql(sql), await hashPasswordParams(sql, params));
     res.status(200).json({ rows });
   } catch (err) {
     console.error("db api error", err);

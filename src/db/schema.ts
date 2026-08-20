@@ -311,6 +311,14 @@ export const app_settings = pgTable("app_settings", {
   created_at: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const sessions = pgTable("sessions", {
+  id: serial("id").primaryKey(),
+  token: text("token").notNull(),
+  user_id: integer("user_id").notNull(),
+  expires_at: text("expires_at").notNull(),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const time_punches = pgTable("time_punches", {
   id: serial("id").primaryKey(),
   user_id: integer("user_id").notNull(),

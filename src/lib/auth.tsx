@@ -9,6 +9,7 @@ import {
 } from "react";
 import { eq } from "drizzle-orm";
 import { db, dbReady, schema } from "../db";
+import { hashPassword, verifyPassword } from "./password";
 import { SESSION_KEY, VIEW_AS_KEY } from "./constants";
 import { createFirstAdmin, hasAnyUsers, seedIfEmpty } from "./seed";
 import { loadAccessBundle, loadDefaultRolePermissions, mergeGroupPermissions } from "./access";
@@ -122,21 +123,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         await seedIfEmpty();
         if (!(await hasAnyUsers())) setNeedsSetup(true);
-        const raw = localStorage.getItem(SESSION_KEY);
-        if (raw) {
-          const id = Number(raw);
-          if (!Number.isNaN(id)) {
-            const rows = await db.select().from(schema.users).where(eq(schema.users.id, id));
-            if (!cancelled && rows[0] && rows[0].is_active) {
-              const session = toSession(rows[0]);
-              setRealUser(session);
-              applyPrefs(session);
-              const mode = session.is_admin ? readViewAs() : "admin";
-              await loadPermissions(rows[0].id, mode, Boolean(session.is_admin));
-            } else {
-              localStorage.removeItem(SESSION_KEY);
-            }
-          }
+        const res = await fetch("/api/db", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "session" }),
+        });
+        const data = (await res.json().catch(() => ({}))) as { user?: Record<string, unknown> };
+        if (!cancelled && data.user?.id) {
+          const session = toSession(data.user);
+          setRealUser(session);
+          applyPrefs(session);
+          const mode = session.is_admin ? readViewAs() : "admin";
+          await loadPermissions(session.id, mode, Boolean(session.is_admin));
+        } else {
+          localStorage.removeItem(SESSION_KEY);
         }
       } catch (err) {
         console.error("auth bootstrap failed", err);
@@ -154,9 +155,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const cleanEmail = email.trim();
     const cleanPassword = password.trim();
     try {
-      if (import.meta.env.PROD) {
+      try {
         const res = await fetch("/api/db", {
           method: "POST",
+          credentials: "include",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "login", email: cleanEmail, password: cleanPassword }),
         });
@@ -164,24 +166,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
           data = (await res.json()) as Record<string, unknown>;
         } catch {
-          return `Database error (${res.status})`;
+          data = {};
         }
-        if (!res.ok) return String(data.error || `Database error (${res.status})`);
-        if (data.error) return String(data.error);
-        const rawUser = data.user as Record<string, unknown> | undefined;
-        if (!rawUser?.id) return "login.error.invalid";
-        const session = toSession(rawUser);
-        setRealUser(session);
-        setViewAsState("admin");
-        localStorage.removeItem(VIEW_AS_KEY);
-        applyPrefs(session);
-        localStorage.setItem(SESSION_KEY, String(session.id));
-        try {
-          await loadPermissions(session.id, "admin", Boolean(session.is_admin));
-        } catch (err) {
-          console.error("permissions after login failed", err);
+        if (res.ok && !data.error && (data.user as Record<string, unknown> | undefined)?.id) {
+          const session = toSession(data.user as Record<string, unknown>);
+          setRealUser(session);
+          setViewAsState("admin");
+          localStorage.removeItem(VIEW_AS_KEY);
+          applyPrefs(session);
+          localStorage.removeItem(SESSION_KEY);
+          try {
+            await loadPermissions(session.id, "admin", Boolean(session.is_admin));
+          } catch (err) {
+            console.error("permissions after login failed", err);
+          }
+          return null;
         }
-        return null;
+        if (res.ok && data.error) return String(data.error);
+        if (res.status === 401 || res.status === 403) return String(data.error || "login.error.invalid");
+      } catch {
+        /* fall through to local store when the API is unavailable */
       }
       await dbReady;
       const rows = await db.select().from(schema.users).where(eq(schema.users.email, cleanEmail.toLowerCase()));
@@ -189,14 +193,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ? rows
         : await db.select().from(schema.users).where(eq(schema.users.email, cleanEmail));
       const match = fallback.find((u) => u.email.toLowerCase() === cleanEmail.toLowerCase());
-      if (!match || match.password !== cleanPassword) return "login.error.invalid";
+      if (!match || !(await verifyPassword(cleanPassword, match.password))) return "login.error.invalid";
       if (!match.is_active) return "login.error.inactive";
       const session = toSession(match);
       setRealUser(session);
       setViewAsState("admin");
       localStorage.removeItem(VIEW_AS_KEY);
       applyPrefs(session);
-      localStorage.setItem(SESSION_KEY, String(match.id));
+      localStorage.removeItem(SESSION_KEY);
       await loadPermissions(match.id, "admin", Boolean(session.is_admin));
       return null;
     } catch (err) {
@@ -221,6 +225,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setPermissions([]);
     localStorage.removeItem(SESSION_KEY);
     localStorage.removeItem(VIEW_AS_KEY);
+    void fetch("/api/db", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "logout" }),
+    });
   }, []);
 
   const setViewAs = useCallback(
@@ -258,8 +268,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (current: string, next: string) => {
       if (!realUser) return "login.error.invalid";
       const rows = await db.select().from(schema.users).where(eq(schema.users.id, realUser.id));
-      if (!rows[0] || rows[0].password !== current) return "profile.passwordWrong";
-      await db.update(schema.users).set({ password: next }).where(eq(schema.users.id, realUser.id));
+      if (!rows[0] || !(await verifyPassword(current, rows[0].password))) return "profile.passwordWrong";
+      await db.update(schema.users).set({ password: await hashPassword(next) }).where(eq(schema.users.id, realUser.id));
       return null;
     },
     [realUser],

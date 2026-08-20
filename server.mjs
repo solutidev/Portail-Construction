@@ -39,7 +39,7 @@ function adaptRes(res) {
     },
     json(body) {
       res.statusCode = this.statusCode;
-      res.setHeader("Content-Type", "application/json");
+      if (!res.getHeader("Content-Type")) res.setHeader("Content-Type", "application/json");
       res.end(JSON.stringify(body));
     },
     end(body) {
@@ -94,30 +94,33 @@ const server = createServer(async (req, res) => {
   try {
     if (req.method === "OPTIONS" && url.pathname.startsWith("/api/")) {
       res.writeHead(204, {
-        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Origin": req.headers.origin || "",
         "Access-Control-Allow-Headers": "Content-Type",
         "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+        "Access-Control-Allow-Credentials": "true",
+        Vary: "Origin",
       });
       res.end();
       return;
     }
+    const headers = { cookie: req.headers.cookie || "" };
     if (url.pathname === "/api/sharepoint") {
       const body = req.method === "POST" ? await readJsonBody(req) : {};
-      await sharepointHandler({ method: req.method, query: queryOf(url), body }, adaptRes(res));
+      await sharepointHandler({ method: req.method, query: queryOf(url), body, headers }, adaptRes(res));
       return;
     }
     if (url.pathname === "/api/mail/send") {
       const body = req.method === "POST" ? await readJsonBody(req) : {};
-      await mailHandler({ method: req.method, body }, adaptRes(res));
+      await mailHandler({ method: req.method, body, headers }, adaptRes(res));
       return;
     }
     if (url.pathname === "/api/db/ping" || (url.pathname === "/api/db" && req.method === "GET")) {
-      await dbHandler({ method: "POST", body: { action: "ping" } }, adaptRes(res));
+      await dbHandler({ method: "POST", body: { action: "ping" }, headers }, adaptRes(res));
       return;
     }
     if (url.pathname === "/api/db") {
       const body = req.method === "POST" ? await readJsonBody(req) : {};
-      await dbHandler({ method: req.method, body }, adaptRes(res));
+      await dbHandler({ method: req.method, body, headers }, adaptRes(res));
       return;
     }
     if (url.pathname === "/healthz") {

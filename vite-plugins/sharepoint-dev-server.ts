@@ -49,7 +49,7 @@ export function sharepointDevServer(): Plugin {
             res.end(payload as Buffer | string | undefined);
           },
         };
-        await handler({ method: req.method, query, body }, fakeRes);
+        await handler({ method: req.method, query, body, headers: { cookie: req.headers.cookie || "" } }, fakeRes);
       });
     },
   };

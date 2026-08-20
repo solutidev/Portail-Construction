@@ -10,8 +10,22 @@ export async function sendInvoiceEmail(input: {
 }) {
   const res = await fetch("/api/mail/send", {
     method: "POST",
+    credentials: "include",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
+    body: JSON.stringify({
+      to: input.to,
+      subject: input.subject,
+      text: input.text,
+      filename: input.filename,
+      pdfBase64: input.pdfBase64,
+      smtp: {
+        host: input.smtp.host,
+        port: input.smtp.port,
+        from_name: input.smtp.from_name,
+        from_email: input.smtp.from_email,
+        secure: input.smtp.secure,
+      },
+    }),
   });
   const payload = (await res.json().catch(() => ({}))) as { error?: string; ok?: boolean };
   if (!res.ok) {

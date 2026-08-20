@@ -82,6 +82,7 @@ export function ConfigSettingsPage() {
 
   async function onSave(e: FormEvent) {
     e.preventDefault();
+    if (!user?.is_admin) return;
     setSaving(true);
     setSaved(false);
     await setSetting(COMPANY_KEY, JSON.stringify(company));

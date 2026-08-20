@@ -21,5 +21,5 @@ echo "Rebuilding app image (Postgres volume is kept)…"
 docker compose up -d --build --remove-orphans
 
 echo
-echo "Updated to $(git rev-parse --short HEAD)."
-echo "Ask users to refresh the browser. Shared data stays in Postgres."
+echo "Mis à jour : $(git rev-parse --short HEAD)."
+echo "Demandez aux utilisateurs d’actualiser le navigateur. Les données Postgres sont conservées."

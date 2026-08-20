@@ -4,11 +4,12 @@ import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import { mailDevServer } from "./vite-plugins/mail-dev-server";
 import { sharepointDevServer } from "./vite-plugins/sharepoint-dev-server";
+import { dbDevServer } from "./vite-plugins/db-dev-server";
 
 export default defineConfig({
   optimizeDeps: { exclude: ["@electric-sql/pglite"] },
   worker: { format: "es" },
-  plugins: [react(), tailwindcss(), mailDevServer(), sharepointDevServer()],
+  plugins: [react(), tailwindcss(), mailDevServer(), sharepointDevServer(), dbDevServer()],
   resolve: {
     alias: { "@": path.resolve(__dirname, "./src") },
   },

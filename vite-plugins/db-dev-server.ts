@@ -1,11 +1,14 @@
 import type { Plugin } from "vite";
-import handler from "../api/mail/send";
+import handler from "../api/db";
 
-export function mailDevServer(): Plugin {
+export function dbDevServer(): Plugin {
   return {
-    name: "mail-dev-server",
+    name: "db-dev-server",
     configureServer(server) {
-      server.middlewares.use("/api/mail/send", async (req, res) => {
+      if (!process.env.SESSION_SECRET) {
+        process.env.SESSION_SECRET = "dev-preview-session-secret";
+      }
+      server.middlewares.use("/api/db", async (req, res) => {
         if (req.method === "OPTIONS") {
           res.writeHead(204, {
             "Access-Control-Allow-Origin": req.headers.origin || "",

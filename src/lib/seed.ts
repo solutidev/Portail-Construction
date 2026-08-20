@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { db, dbReady, schema } from "../db";
 import { initials, isoDate } from "./format";
 import { ensureDefaultGroups } from "./access";
+import { hashPassword, isHashedPassword } from "./password";
 
 const EMAIL_MIGRATIONS: Record<string, string> = {
   "admin@soluti.dev": "admin@frxconstruction.ca",
@@ -17,8 +18,10 @@ async function migrateLegacyBrand() {
     if (next) {
       await db.update(schema.users).set({ email: next }).where(eq(schema.users.id, user.id));
     }
-    if (user.password === "forge123") {
-      await db.update(schema.users).set({ password: "frx123" }).where(eq(schema.users.id, user.id));
+    if (user.password === "forge123" || user.password === "frx123" || user.password === "admin123" || user.password === "client123") {
+      await db.update(schema.users).set({ password: await hashPassword(user.password === "forge123" ? "frx123" : user.password) }).where(eq(schema.users.id, user.id));
+    } else if (user.password && !isHashedPassword(user.password)) {
+      await db.update(schema.users).set({ password: await hashPassword(user.password) }).where(eq(schema.users.id, user.id));
     }
   }
 }
@@ -143,7 +146,7 @@ export async function createFirstAdmin(input: { name: string; email: string; pas
   await db.insert(schema.users).values({
     name,
     email,
-    password,
+    password: await hashPassword(password),
     user_type: "internal",
     title: "Administrator",
     phone: null,
@@ -171,11 +174,12 @@ async function upsertUser(values: {
 }) {
   const email = values.email.toLowerCase();
   const found = await db.select().from(schema.users).where(eq(schema.users.email, email));
+  const hashed = isHashedPassword(values.password) ? values.password : await hashPassword(values.password);
   if (found[0]) {
     await db
       .update(schema.users)
       .set({
-        password: values.password,
+        password: found[0].password && isHashedPassword(found[0].password) ? found[0].password : hashed,
         is_active: 1,
         is_admin: values.is_admin,
         name: values.name,
@@ -189,7 +193,7 @@ async function upsertUser(values: {
     .values({
       name: values.name,
       email,
-      password: values.password,
+      password: hashed,
       user_type: values.user_type,
       title: values.title,
       phone: values.phone,

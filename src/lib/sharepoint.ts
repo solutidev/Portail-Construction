@@ -29,15 +29,16 @@ export async function callSharePoint<T>(
   extra: Record<string, unknown> = {},
 ): Promise<T> {
   const settings = await getSharePointSettings();
-  if (!settings.tenant_id || !settings.client_id || !settings.client_secret || !settings.site_url) {
+  if (!settings.tenant_id || !settings.client_id || !settings.site_url) {
     throw new Error("SharePoint is not configured. Open Setup → SharePoint and save tenant, app ID, secret, and site URL.");
   }
   const res = await fetch("/api/sharepoint", {
     method: "POST",
+    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       action,
-      config: { ...publicSharePointConfig(settings), client_secret: settings.client_secret },
+      config: publicSharePointConfig(settings),
       ...extra,
     }),
   });

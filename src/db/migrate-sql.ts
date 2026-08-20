@@ -70,6 +70,8 @@ ALTER TABLE projects ADD COLUMN IF NOT EXISTS geo_lng REAL;
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS geo_radius_m INTEGER;
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS require_geofence INTEGER;
 UPDATE projects SET require_geofence = 0 WHERE require_geofence IS NULL;
+CREATE TABLE IF NOT EXISTS sessions (id SERIAL PRIMARY KEY, token TEXT NOT NULL, user_id INTEGER NOT NULL, expires_at TEXT NOT NULL, created_at TIMESTAMP DEFAULT NOW() NOT NULL);
+CREATE UNIQUE INDEX IF NOT EXISTS sessions_token_idx ON sessions (token);
 CREATE TABLE IF NOT EXISTS time_punches (id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL, project_id INTEGER NOT NULL, kind TEXT NOT NULL, punched_at TEXT NOT NULL, lat REAL, lng REAL, accuracy REAL, distance_m INTEGER, status TEXT NOT NULL, note TEXT, created_at TIMESTAMP DEFAULT NOW() NOT NULL);
 CREATE TABLE IF NOT EXISTS project_reports (id SERIAL PRIMARY KEY, project_id INTEGER NOT NULL, name TEXT NOT NULL, sections TEXT NOT NULL, created_by INTEGER, created_at TIMESTAMP DEFAULT NOW() NOT NULL);
 CREATE TABLE IF NOT EXISTS sharepoint_folders (id SERIAL PRIMARY KEY, project_id INTEGER NOT NULL, name TEXT NOT NULL, sp_item_id TEXT NOT NULL, sp_drive_id TEXT NOT NULL, path TEXT NOT NULL, created_at TIMESTAMP DEFAULT NOW() NOT NULL);

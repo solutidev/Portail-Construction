@@ -38,6 +38,7 @@ import { groupFitsUser, isDefaultClientGroup, setUserGroups } from "@/lib/access
 import { GroupPicker } from "./GroupPicker";
 import { GroupsEditor } from "./GroupsEditor";
 import type { AccessGroup, Client, Project, User } from "@/lib/types";
+import { hashPassword, randomPassword } from "@/lib/password";
 
 const emptyClient = {
   name: "",
@@ -55,7 +56,7 @@ const emptyClient = {
 const emptyUser = {
   name: "",
   email: "",
-  password: "client123",
+  password: "",
   title: "",
   phone: "",
   is_primary: false,
@@ -179,7 +180,7 @@ export function ConfigClientsPage({ embedded = false }: { embedded?: boolean }) 
       .values({
         name: userForm.name.trim(),
         email: userForm.email.trim().toLowerCase(),
-        password: userForm.password || "client123",
+        password: await hashPassword(userForm.password.trim() || randomPassword()),
         user_type: "external",
         title: userForm.title.trim() || null,
         phone: userForm.phone.trim() || null,

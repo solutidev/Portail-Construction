@@ -56,8 +56,9 @@ PORT=8080
 GIT_BRANCH=main
 POSTGRES_DB=frx
 POSTGRES_USER=frx
-POSTGRES_PASSWORD=frx-change-me
-DATABASE_URL=postgres://frx:frx-change-me@db:5432/frx
+POSTGRES_PASSWORD=<strong unique password>
+DATABASE_URL=postgres://frx:<same-password>@db:5432/frx
+SESSION_SECRET=<long random string>
 SHAREPOINT_CLIENT_SECRET=
 ```
 

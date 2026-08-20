@@ -26,11 +26,12 @@ import { useI18n } from "@/lib/i18n";
 import { GroupPicker } from "./GroupPicker";
 import { GroupsEditor } from "./GroupsEditor";
 import type { AccessGroup, User, UserAccessGroup } from "@/lib/types";
+import { hashPassword, randomPassword } from "@/lib/password";
 
 const empty = {
   name: "",
   email: "",
-  password: "frx123",
+  password: "",
   title: "",
   phone: "",
   is_admin: false,
@@ -75,13 +76,14 @@ export function ConfigInternalUsersPage({ embedded = false }: { embedded?: boole
 
   async function onCreate(e: FormEvent) {
     e.preventDefault();
+    if (!user?.is_admin) return;
     setSaving(true);
     const [created] = await db
       .insert(schema.users)
       .values({
         name: form.name.trim(),
         email: form.email.trim().toLowerCase(),
-        password: form.password || "frx123",
+        password: await hashPassword(form.password.trim() || randomPassword()),
         user_type: "internal",
         title: form.title.trim() || null,
         phone: form.phone.trim() || null,
@@ -119,6 +121,7 @@ export function ConfigInternalUsersPage({ embedded = false }: { embedded?: boole
   function openCreate() {
     setForm({
       ...empty,
+      password: randomPassword(),
       groupIds: internalGroups.filter(isDefaultStaffGroup).map((g) => g.id),
     });
     setOpen(true);

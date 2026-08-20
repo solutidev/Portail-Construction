@@ -1,12 +1,10 @@
 import {
-  copyItem,
   createFolder,
   deleteItem,
   downloadFile,
   getGraphToken,
   listChildren,
   mergeSharePointConfig,
-  moveItem,
   officeEditUrl,
   renameItem,
   resolveDrive,
@@ -14,8 +12,14 @@ import {
   uploadSmallFile,
   type SharePointConfig,
 } from "./_lib/sharepoint.js";
+import { requireApiUser } from "./db.ts";
 
-type Req = { method?: string; query?: Record<string, string | string[]>; body?: Record<string, unknown> };
+type Req = {
+  method?: string;
+  query?: Record<string, string | string[]>;
+  body?: Record<string, unknown>;
+  headers?: Record<string, unknown>;
+};
 type Res = {
   status: (code: number) => { json: (body: unknown) => unknown; end?: (body?: unknown) => unknown };
   json: (body: unknown) => unknown;

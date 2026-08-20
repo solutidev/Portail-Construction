@@ -11,6 +11,7 @@ const useRemote = import.meta.env.PROD;
 async function remoteQuery(sql: string, params: unknown[], _method: "all" | "execute") {
   const res = await fetch("/api/db", {
     method: "POST",
+    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ sql, params }),
   });

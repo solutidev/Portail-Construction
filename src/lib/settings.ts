@@ -57,14 +57,29 @@ export async function getSetting(key: string) {
   return rows[0]?.value ?? null;
 }
 
+function keepSecrets(prevRaw: string | null | undefined, nextRaw: string) {
+  if (!prevRaw) return nextRaw;
+  try {
+    const prev = JSON.parse(prevRaw) as Record<string, unknown>;
+    const next = JSON.parse(nextRaw) as Record<string, unknown>;
+    for (const key of ["password", "client_secret"]) {
+      if (next[key] === "********" || next[key] === "") next[key] = prev[key];
+    }
+    return JSON.stringify(next);
+  } catch {
+    return nextRaw;
+  }
+}
+
 export async function setSetting(key: string, value: string) {
   await dbReady;
   const existing = await db.select().from(schema.app_settings).where(eq(schema.app_settings.key, key));
+  const stored = keepSecrets(existing[0]?.value, value);
   if (existing[0]) {
-    await db.update(schema.app_settings).set({ value }).where(eq(schema.app_settings.id, existing[0].id));
+    await db.update(schema.app_settings).set({ value: stored }).where(eq(schema.app_settings.id, existing[0].id));
     return;
   }
-  await db.insert(schema.app_settings).values({ key, value });
+  await db.insert(schema.app_settings).values({ key, value: stored });
 }
 
 export async function getCompanyProfile(): Promise<CompanyProfile> {
@@ -77,11 +92,25 @@ export async function getCompanyProfile(): Promise<CompanyProfile> {
   }
 }
 
+function redactSecret<T extends Record<string, unknown>>(value: T, keys: string[]): T {
+  const next = { ...value };
+  for (const key of keys) {
+    if (typeof next[key] === "string" && String(next[key]).length > 0) {
+      (next as Record<string, unknown>)[key] = "********";
+    }
+  }
+  return next;
+}
+
+function hasSecret(value: string | undefined) {
+  return Boolean(value && value !== "********");
+}
+
 export async function getSmtpSettings(): Promise<SmtpSettings> {
   const raw = await getSetting(SMTP_KEY);
   if (!raw) return { ...EMPTY_SMTP };
   try {
-    return { ...EMPTY_SMTP, ...(JSON.parse(raw) as Partial<SmtpSettings>) };
+    return redactSecret({ ...EMPTY_SMTP, ...(JSON.parse(raw) as Partial<SmtpSettings>) }, ["password"]) as SmtpSettings;
   } catch {
     return { ...EMPTY_SMTP };
   }
@@ -95,21 +124,27 @@ export async function getQuickBooksSettings(): Promise<QuickBooksSettings> {
   const raw = await getSetting(QUICKBOOKS_KEY);
   if (!raw) return { ...EMPTY_QUICKBOOKS };
   try {
-    return { ...EMPTY_QUICKBOOKS, ...(JSON.parse(raw) as Partial<QuickBooksSettings>) };
+    return redactSecret(
+      { ...EMPTY_QUICKBOOKS, ...(JSON.parse(raw) as Partial<QuickBooksSettings>) },
+      ["client_secret"],
+    ) as QuickBooksSettings;
   } catch {
     return { ...EMPTY_QUICKBOOKS };
   }
 }
 
 export function quickbooksReady(settings: QuickBooksSettings) {
-  return Boolean(settings.client_id && settings.client_secret && settings.realm_id);
+  return Boolean(settings.client_id && (hasSecret(settings.client_secret) || settings.client_secret === "********") && settings.realm_id);
 }
 
 export async function getSharePointSettings(): Promise<SharePointSettings> {
   const raw = await getSetting(SHAREPOINT_KEY);
   if (!raw) return { ...EMPTY_SHAREPOINT };
   try {
-    return { ...EMPTY_SHAREPOINT, ...(JSON.parse(raw) as Partial<SharePointSettings>) };
+    return redactSecret(
+      { ...EMPTY_SHAREPOINT, ...(JSON.parse(raw) as Partial<SharePointSettings>) },
+      ["client_secret"],
+    ) as SharePointSettings;
   } catch {
     return { ...EMPTY_SHAREPOINT };
   }

@@ -43,7 +43,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     localStorage.setItem(LOCALE_KEY, locale);
-    document.documentElement.lang = locale;
+    document.documentElement.lang = locale === "fr" ? "fr-CA" : "en-CA";
   }, [locale]);
 
   const setLocale = useCallback((next: Locale) => {
