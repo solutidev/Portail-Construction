@@ -20,6 +20,7 @@ import { PunchPage } from "@/pages/PunchPage";
 import { TimesheetsPage } from "@/pages/TimesheetsPage";
 import { DocumentsPage } from "@/pages/DocumentsPage";
 import { DocumentsProjectsPage } from "@/pages/DocumentsProjectsPage";
+import { ReportsPage } from "@/pages/ReportsPage";
 
 function ProtectedLayout() {
   const { user, ready } = useAuth();
@@ -59,6 +60,7 @@ export default function App() {
           <Route path="clients/:clientId/billing" element={<ClientBillingPage />} />
           <Route path="accounting/billing" element={<AccountingBillingPage />} />
           <Route path="projects" element={<ProjectsPage />} />
+          <Route path="reports" element={<ReportsPage />} />
           <Route path="projects/:projectId" element={<ProjectDetailPage />} />
           <Route path="projects/:projectId/:section" element={<ProjectDetailPage />} />
           <Route path="team" element={<TeamPage />} />

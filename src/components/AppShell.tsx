@@ -12,6 +12,7 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  Presentation,
   Receipt,
   Moon,
   Shield,
@@ -89,6 +90,7 @@ const CRUMB: Record<string, MessageKey> = {
   timesheets: "nav.timesheets",
   tools: "nav.tools",
   documents: "nav.documents",
+  reports: "nav.reports",
 };
 
 function linkClass(isActive: boolean) {
@@ -174,8 +176,10 @@ function OperationsLinks({
   showBilling?: boolean;
 }) {
   const { t } = useI18n();
+  const { user } = useAuth();
   const { selectedClient, clientProjects } = useWorkspace();
   if (!selectedClient) return null;
+  const showReports = Boolean(user?.is_admin && user.view_as !== "client");
 
   return (
     <div className="flex flex-col gap-0.5">
@@ -207,6 +211,17 @@ function OperationsLinks({
         <span className="min-w-0 flex-1 truncate">{t("nav.projects")}</span>
         <span className="tabular-nums text-[11px] text-sidebar-foreground/50">{clientProjects.length}</span>
       </NavLink>
+      {showReports ? (
+        <NavLink
+          to="/reports"
+          end
+          onClick={onNavigate}
+          className={({ isActive }) => cn(linkClass(isActive), "pl-8")}
+        >
+          <Presentation className="size-4 shrink-0 opacity-80" />
+          {t("nav.reports")}
+        </NavLink>
+      ) : null}
       {showBilling ? (
         <NavLink
           to={`/clients/${selectedClient.id}/billing`}

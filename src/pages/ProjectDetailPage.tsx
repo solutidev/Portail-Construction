@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Switch } from "@/components/ui/switch";
-import { getCurrentPosition } from "@/lib/timeclock";
+import { getCurrentPosition, pairPunches } from "@/lib/timeclock";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { eq } from "drizzle-orm";
 import { ArrowLeft, FolderKanban, Pencil, Plus, Users } from "lucide-react";
@@ -25,7 +25,7 @@ import {
   TASK_STATUSES,
   TEAM_ROLES,
 } from "@/lib/constants";
-import type { Client, CompanyProfile, ModuleId, Project, User } from "@/lib/types";
+import type { Client, CompanyProfile, ModuleId, Project, TimePunch, User } from "@/lib/types";
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -87,6 +87,7 @@ export function ProjectDetailPage() {
   const [logs, setLogs] = useState<(typeof schema.daily_logs.$inferSelect)[]>([]);
   const [punch, setPunch] = useState<(typeof schema.punch_items.$inferSelect)[]>([]);
   const [incidents, setIncidents] = useState<(typeof schema.safety_incidents.$inferSelect)[]>([]);
+  const [labour, setLabour] = useState<{ name: string; minutes: number; job: string }[]>([]);
   const [savedReports, setSavedReports] = useState<(typeof schema.project_reports.$inferSelect)[]>([]);
   const [company, setCompany] = useState<CompanyProfile | null>(null);
   const [clientRow, setClientRow] = useState<Client | null>(null);
@@ -121,6 +122,18 @@ export function ProjectDetailPage() {
     setLogs(await db.select().from(schema.daily_logs).where(eq(schema.daily_logs.project_id, id)));
     setPunch(await db.select().from(schema.punch_items).where(eq(schema.punch_items.project_id, id)));
     setIncidents(await db.select().from(schema.safety_incidents).where(eq(schema.safety_incidents.project_id, id)));
+    const punches = (await db.select().from(schema.time_punches).where(eq(schema.time_punches.project_id, id))) as TimePunch[];
+    const labourMap = new Map<number, { name: string; minutes: number; job: string }>();
+    for (const entry of pairPunches(punches)) {
+      const person = users.find((u) => u.id === entry.punchIn.user_id);
+      const prev = labourMap.get(entry.punchIn.user_id);
+      labourMap.set(entry.punchIn.user_id, {
+        name: person?.name ?? `#${entry.punchIn.user_id}`,
+        minutes: (prev?.minutes ?? 0) + entry.minutes,
+        job: rows[0].name as string,
+      });
+    }
+    setLabour([...labourMap.values()].sort((a, b) => b.minutes - a.minutes));
     setSavedReports(await db.select().from(schema.project_reports).where(eq(schema.project_reports.project_id, id)));
     setLoading(false);
   }
@@ -359,6 +372,17 @@ export function ProjectDetailPage() {
                 logs,
                 members,
                 people,
+                labour,
+                portfolio: [
+                  {
+                    name: project.name,
+                    number: project.project_number,
+                    client: clientName,
+                    status: project.status,
+                    budget: project.budget,
+                    spent: project.spent,
+                  },
+                ],
               }}
               saved={savedReports}
               canCreate={can("reports", "create", scope) || Boolean(user?.is_admin)}

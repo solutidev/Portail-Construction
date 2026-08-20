@@ -10,7 +10,9 @@ export type ReportSectionId =
   | "punch"
   | "safety"
   | "logs"
-  | "team";
+  | "team"
+  | "labour"
+  | "portfolio";
 
 export const REPORT_SECTIONS: { id: ReportSectionId; labelKey: string }[] = [
   { id: "snapshot", labelKey: "reports.sec.snapshot" },
@@ -22,9 +24,11 @@ export const REPORT_SECTIONS: { id: ReportSectionId; labelKey: string }[] = [
   { id: "safety", labelKey: "reports.sec.safety" },
   { id: "logs", labelKey: "reports.sec.logs" },
   { id: "team", labelKey: "reports.sec.team" },
+  { id: "labour", labelKey: "reports.sec.labour" },
+  { id: "portfolio", labelKey: "reports.sec.portfolio" },
 ];
 
-export type ReportKind = "status" | "cost" | "closeout" | "safety" | "custom";
+export type ReportKind = "status" | "cost" | "closeout" | "safety" | "labour" | "portfolio" | "full" | "custom";
 
 export const STANDARD_REPORTS: {
   id: Exclude<ReportKind, "custom">;
@@ -56,6 +60,24 @@ export const STANDARD_REPORTS: {
     descKey: "reports.std.safetyDesc",
     sections: ["snapshot", "safety", "logs"],
   },
+  {
+    id: "labour",
+    titleKey: "reports.std.labour",
+    descKey: "reports.std.labourDesc",
+    sections: ["snapshot", "labour", "team", "logs"],
+  },
+  {
+    id: "portfolio",
+    titleKey: "reports.std.portfolio",
+    descKey: "reports.std.portfolioDesc",
+    sections: ["portfolio", "snapshot", "budget"],
+  },
+  {
+    id: "full",
+    titleKey: "reports.std.full",
+    descKey: "reports.std.fullDesc",
+    sections: ["snapshot", "schedule", "budget", "rfis", "changes", "punch", "safety", "logs", "team", "labour", "portfolio"],
+  },
 ];
 
 export type ReportRow = { label: string; value: string };
@@ -77,6 +99,8 @@ export type ReportPack = {
   logs: { log_date: string; weather: string | null; crew_count: number; notes: string | null }[];
   members: { user_id: number; role: string }[];
   people: User[];
+  labour: { name: string; minutes: number; job: string }[];
+  portfolio: { name: string; number: string; client: string; status: string; budget: number; spent: number }[];
 };
 
 export type BuiltReport = {
@@ -212,6 +236,28 @@ export function buildReport(opts: {
       rows: pack.members.map((m) => ({
         label: nameOf(pack.people, m.user_id),
         value: m.role,
+      })),
+    }),
+    labour: () => {
+      const total = pack.labour.reduce((s, row) => s + row.minutes, 0);
+      const hours = Math.round(total / 60);
+      return {
+        id: "labour",
+        title: t("reports.sec.labour"),
+        summary: t("reports.labour.summary", { n: pack.labour.length, hours }),
+        rows: pack.labour.slice(0, 24).map((row) => ({
+          label: `${row.name} · ${row.job}`,
+          value: `${Math.floor(row.minutes / 60)}h ${String(row.minutes % 60).padStart(2, "0")}m`,
+        })),
+      };
+    },
+    portfolio: () => ({
+      id: "portfolio",
+      title: t("reports.sec.portfolio"),
+      summary: t("reports.portfolio.summary", { n: pack.portfolio.length }),
+      rows: pack.portfolio.slice(0, 24).map((job) => ({
+        label: `${job.number} · ${job.name}`,
+        value: `${job.client} · ${job.status} · ${money(job.spent, locale)} / ${money(job.budget, locale)}`,
       })),
     }),
   };
