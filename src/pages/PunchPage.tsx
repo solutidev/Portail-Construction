@@ -173,6 +173,11 @@ function ClockView({
     setBusy(true);
     setError(null);
     try {
+      if (selected.require_geofence && !projectFence(selected)) {
+        setError(t("punch.geo.missingPin"));
+        setBusy(false);
+        return;
+      }
       const fence = projectFence(selected);
       let lat: number | null = null;
       let lng: number | null = null;
@@ -607,7 +612,12 @@ function StatCard({ label, value, hint }: { label: string; value: string; hint: 
 function FenceHint({ project }: { project: Project }) {
   const { t } = useI18n();
   const fence = projectFence(project);
-  if (!fence) return <p className="text-xs text-muted-foreground">{t("punch.anywhere")}</p>;
+  if (!project.require_geofence) {
+    return <p className="text-xs text-muted-foreground">{t("punch.anywhere")}</p>;
+  }
+  if (!fence) {
+    return <p className="text-xs text-destructive">{t("punch.geo.missingPin")}</p>;
+  }
   return (
     <p className="flex items-center gap-1 text-xs text-muted-foreground">
       <MapPin className="size-3.5" />

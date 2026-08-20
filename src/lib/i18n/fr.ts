@@ -810,6 +810,7 @@ export const fr: Record<MessageKey, string> = {
   "punch.geo.useHere": "Utiliser ma position",
   "punch.geo.save": "Enregistrer la règle",
   "punch.geo.saved": "Règle de lieu enregistrée.",
+  "punch.geo.missingPin": "Ce chantier exige une position. Un admin doit enregistrer latitude, longitude et rayon sur le tableau de bord du projet.",
   "punch.tab.clock": "Pointer",
   "punch.tab.overview": "Gestion",
   "punch.adminDesc": "Pointez comme l’équipe, ou consultez les heures, les pointages en cours et l’activité des chantiers.",

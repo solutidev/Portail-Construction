@@ -808,6 +808,7 @@ export const en = {
   "punch.geo.useHere": "Use my location",
   "punch.geo.save": "Save location rule",
   "punch.geo.saved": "Location rule saved.",
+  "punch.geo.missingPin": "This job requires a site pin. Ask an admin to save latitude, longitude, and radius on the project dashboard.",
   "punch.tab.clock": "Clock in",
   "punch.tab.overview": "Management",
   "punch.adminDesc": "Clock in like the crew, or review hours, live punches, and site activity.",

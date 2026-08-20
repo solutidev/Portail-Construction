@@ -591,6 +591,13 @@ function PunchGeoCard({
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
+  useEffect(() => {
+    setRequireFence(project.require_geofence === 1);
+    setLat(project.geo_lat != null ? String(project.geo_lat) : "");
+    setLng(project.geo_lng != null ? String(project.geo_lng) : "");
+    setRadius(String(project.geo_radius_m ?? 200));
+  }, [project.id, project.require_geofence, project.geo_lat, project.geo_lng, project.geo_radius_m]);
+
   async function save() {
     setSaving(true);
     setSaved(false);
