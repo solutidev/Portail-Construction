@@ -107,9 +107,9 @@ async function ensureDemoUsers() {
     if (found.rowCount && found.rowCount > 0) {
       await getPool().query(
         `UPDATE users
-         SET password = $2, is_active = 1, is_admin = $3, name = $4, user_type = $5
+         SET is_active = 1, is_admin = $2, name = $3, user_type = $4
          WHERE lower(email) = lower($1)`,
-        [user.email, user.password, user.is_admin, user.name, user.user_type],
+        [user.email, user.is_admin, user.name, user.user_type],
       );
       continue;
     }
@@ -119,7 +119,7 @@ async function ensureDemoUsers() {
       [
         user.name,
         user.email,
-        user.password,
+        hashPassword(user.password),
         user.user_type,
         user.title,
         user.phone,
@@ -381,11 +381,13 @@ export async function handleDbRequest(req: { method?: string; body?: any; header
     if (action === "login") {
       const result = await loginUser(String(req.body?.email ?? ""), String(req.body?.password ?? ""));
       if ("user" in result && result.user) {
-        res.setHeader?.("Set-Cookie", sessionCookie(Number(result.user.id)));
+        const token = await createDbSession(Number(result.user.id));
+        res.setHeader?.("Set-Cookie", sessionCookie(token));
       }
       return res.status(200).json(result);
     }
     if (action === "logout") {
+      await revokeDbSession(tokenFromCookieHeader(cookieHeaderOf(req)));
       res.setHeader?.("Set-Cookie", clearSessionCookie());
       return res.status(200).json({ ok: true });
     }
@@ -405,12 +407,28 @@ export async function handleDbRequest(req: { method?: string; body?: any; header
       res.status(400).json({ error: "sql is required" });
       return;
     }
-    const mutating = /^\s*(insert|update|delete|alter|drop|truncate|create|grant|revoke)\b/i.test(sql);
-    const sensitive =
-      /\b(users|user_permissions|access_groups|access_group_permissions|user_access_groups|app_settings)\b/i.test(sql);
-    if (mutating && sensitive && Number(session.is_admin) !== 1) {
-      res.status(403).json({ error: "Forbidden" });
+    if (!isAllowedSql(sql)) {
+      res.status(400).json({ error: "Query not allowed" });
       return;
+    }
+    const mutating = /^\s*(insert|update|delete)\b/i.test(sql);
+    const sensitive =
+      /\b(users|user_permissions|access_groups|access_group_permissions|user_access_groups|app_settings|sessions)\b/i.test(
+        sql,
+      );
+    if (mutating && sensitive && Number(session.is_admin) !== 1) {
+      const selfProfile =
+        /^\s*update\s+"?users"?\s+set\b/i.test(sql) &&
+        /\bid\s*=\s*\$/i.test(sql) &&
+        !/\bis_admin\b/i.test(sql) &&
+        !/\bpassword\b/i.test(sql);
+      if (!selfProfile) {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+      }
+    }
+    if (mutating && /\bpassword\b/i.test(sql) && /^\s*update\s+"?users"?/i.test(sql)) {
+      await revokeUserSessions(session.id);
     }
     const { rows } = await runSql(rewriteSql(sql), await hashPasswordParams(sql, params));
     res.status(200).json({ rows });

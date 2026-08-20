@@ -112,6 +112,20 @@ sudo bash /opt/frx-portal/scripts/update.sh
 
 Never run `docker compose down -v` unless you intend to wipe the database.
 
+## Login fails / no users after an update
+
+Postgres keeps the password from the **first** time the volume was created. If `.env` later got a new `POSTGRES_PASSWORD`, the app cannot open the existing database, so login looks empty.
+
+1. Put the **original** password back in `/opt/frx-portal/.env` (`POSTGRES_PASSWORD` and the password in `DATABASE_URL` must match).
+2. Then:
+
+```bash
+cd /opt/frx-portal
+sudo docker compose up -d
+```
+
+Do **not** run `docker compose down -v` unless you intend to wipe all users.
+
 ## Fix: `SESSION_SECRET is missing a value`
 
 Compose interpolates `.env` before the container starts. An empty `SESSION_SECRET=` line is treated as missing.

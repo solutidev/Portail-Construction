@@ -23,15 +23,20 @@ export function sessionMaxAgeSeconds() {
   return MAX_AGE;
 }
 
+function cookieSecureFlag() {
+  // Only mark Secure when the site is actually served over HTTPS.
+  // NODE_ENV=production on http://server-ip:8080 would otherwise drop the cookie.
+  if (process.env.COOKIE_SECURE === "1" || process.env.COOKIE_SECURE === "true") return "; Secure";
+  return "";
+}
+
 export function sessionCookie(token: string) {
   requireSessionSecret();
-  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
-  return `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${MAX_AGE}${secure}`;
+  return `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${MAX_AGE}${cookieSecureFlag()}`;
 }
 
 export function clearSessionCookie() {
-  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
-  return `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`;
+  return `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${cookieSecureFlag()}`;
 }
 
 export function tokenFromCookieHeader(header: string | undefined | null) {

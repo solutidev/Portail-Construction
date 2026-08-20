@@ -63,14 +63,35 @@ if [[ -z "$secret" ]]; then
 fi
 
 pw="$(get_var POSTGRES_PASSWORD)"
+url="$(get_var DATABASE_URL)"
+# Never invent a new Postgres password if a volume already exists — that
+# disconnects the app from existing users. Only fill blanks; keep DATABASE_URL
+# if it already has a real password.
 if [[ -z "$pw" ]]; then
-  pw="$(rand | cut -c1-24)"
-  set_var POSTGRES_PASSWORD "$pw"
-  echo "Generated POSTGRES_PASSWORD in $ENV_FILE"
+  if [[ -n "$url" && "$url" != *CHANGE_ME* ]]; then
+    extracted="$(python3 - "$url" <<'PY'
+import sys, urllib.parse
+u = urllib.parse.urlparse(sys.argv[1])
+print(urllib.parse.unquote(u.password or ""))
+PY
+)"
+    if [[ -n "$extracted" ]]; then
+      pw="$extracted"
+      set_var POSTGRES_PASSWORD "$pw"
+      echo "Copied POSTGRES_PASSWORD from DATABASE_URL"
+    fi
+  fi
+fi
+if [[ -z "$pw" ]]; then
+  echo "POSTGRES_PASSWORD is empty in $ENV_FILE."
+  echo "Set the SAME password Postgres was first created with. Do not generate a new one or existing users will disappear."
+  exit 1
 fi
 
 user="$(get_var POSTGRES_USER)"
 db="$(get_var POSTGRES_DB)"
 user="${user:-frx}"
 db="${db:-frx}"
-set_var DATABASE_URL "postgres://${user}:${pw}@db:5432/${db}"
+if [[ -z "$url" || "$url" == *CHANGE_ME* ]]; then
+  set_var DATABASE_URL "postgres://${user}:${pw}@db:5432/${db}"
+fi

@@ -42,7 +42,13 @@ function createLocal() {
 function createRemote() {
   const db = drizzleProxy(remoteQuery, { schema });
   const ready = (async () => {
-    await remoteQuery("SELECT 1", [], "all");
+    const res = await fetch("/api/db", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "ping" }),
+    });
+    if (!res.ok) throw new Error(`Database error (${res.status})`);
   })();
   return { db, ready };
 }
