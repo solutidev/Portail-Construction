@@ -19,6 +19,7 @@ import { ConfigSettingsPage } from "@/pages/config/ConfigSettingsPage";
 import { PunchPage } from "@/pages/PunchPage";
 import { TimesheetsPage } from "@/pages/TimesheetsPage";
 import { DocumentsPage } from "@/pages/DocumentsPage";
+import { DocumentsProjectsPage } from "@/pages/DocumentsProjectsPage";
 
 function ProtectedLayout() {
   const { user, ready } = useAuth();
@@ -52,6 +53,7 @@ export default function App() {
         >
           <Route index element={<DashboardPage />} />
           <Route path="documents" element={<DocumentsPage />} />
+          <Route path="documents/projects" element={<DocumentsProjectsPage />} />
           <Route path="clients" element={<ClientsPage />} />
           <Route path="clients/:clientId" element={<ClientDetailPage />} />
           <Route path="clients/:clientId/billing" element={<ClientBillingPage />} />

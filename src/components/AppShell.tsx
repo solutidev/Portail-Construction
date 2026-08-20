@@ -276,6 +276,14 @@ function StaffNav({ onNavigate }: { onNavigate?: () => void }) {
         <FileText className="size-4 shrink-0 opacity-80" />
         {t("nav.documents")}
       </NavLink>
+      <NavLink
+        to="/documents/projects"
+        onClick={onNavigate}
+        className={({ isActive }) => cn(linkClass(isActive), "ml-4")}
+      >
+        <FolderKanban className="size-4 shrink-0 opacity-80" />
+        {t("sp.tab.projects")}
+      </NavLink>
 
       <NavSection
         id="operations"
