@@ -41,6 +41,7 @@ export function DocumentsProjectsPage() {
   const [busy, setBusy] = useState(false);
   const folders = useSharePointFolders(open);
   const canCreate = Boolean(user?.is_admin || user?.user_type === "internal") && user?.view_as !== "client";
+  const [collapsed, setCollapsed] = useState<Record<number, boolean>>({});
 
   const groups = useMemo(() => {
     const q = query.trim().toLowerCase();
