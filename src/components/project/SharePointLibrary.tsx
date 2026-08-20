@@ -506,7 +506,7 @@ export function SharePointLibrary({
         <Card className="mb-3 gap-3 p-3">
           <div className="flex flex-wrap items-center gap-2">
             <FolderTreeMenu
-              folders={navFolders}
+              folders={showRoot && libraryRoot ? [libraryRoot] : navFolders}
               driveId={settings.drive_id}
               currentKey={browse?.id || active?.sp_item_id || `db-${active?.id ?? 0}`}
               onOpen={(root, nextTrail) => {
