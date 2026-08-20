@@ -16,43 +16,45 @@ function normalizePath(path: string) {
   return path.replace(/^\/+|\/+$/g, "");
 }
 
+function folderKey(folder: BrowseFolder) {
+  return folder.sp_item_id || `db-${folder.id}`;
+}
+
+function parentOf(path: string) {
+  const parts = normalizePath(path).split("/").filter(Boolean);
+  parts.pop();
+  return parts.join("/");
+}
+
 export function buildFolderTree(folders: BrowseFolder[]): TreeNode[] {
+  const library = folders.find((f) => f.id === 0);
+  const assigned = folders.filter((f) => f.id !== 0);
   const nodes = new Map<string, TreeNode>();
-  const order = [...folders].sort(
+  const order = [...assigned].sort(
     (a, b) => normalizePath(a.path).split("/").filter(Boolean).length - normalizePath(b.path).split("/").filter(Boolean).length,
   );
+  for (const folder of order) nodes.set(folderKey(folder), { folder, children: [] });
 
+  const hanging: TreeNode[] = [];
   for (const folder of order) {
-    nodes.set(`${folder.id}:${folder.sp_item_id}`, { folder, children: [] });
-  }
-
-  const roots: TreeNode[] = [];
-  for (const folder of order) {
-    const node = nodes.get(`${folder.id}:${folder.sp_item_id}`);
+    const node = nodes.get(folderKey(folder));
     if (!node) continue;
-    if (folder.id === 0) {
-      roots.push(node);
-      continue;
-    }
-    const mine = normalizePath(folder.path);
+    const parentPath = parentOf(folder.path);
     let parent: TreeNode | undefined;
-    let best = -1;
-    for (const candidate of order) {
-      if (candidate === folder) continue;
-      const theirs = normalizePath(candidate.path);
-      const isLibrary = candidate.id === 0;
-      const match = isLibrary ? true : Boolean(theirs) && (mine === theirs || mine.startsWith(`${theirs}/`));
-      if (!match) continue;
-      const depth = isLibrary ? 0 : theirs.split("/").filter(Boolean).length;
-      if (depth > best && (isLibrary || depth < mine.split("/").filter(Boolean).length)) {
-        best = depth;
-        parent = nodes.get(`${candidate.id}:${candidate.sp_item_id}`);
+    if (parentPath) {
+      for (const candidate of order) {
+        if (normalizePath(candidate.path) === parentPath) {
+          parent = nodes.get(folderKey(candidate));
+          break;
+        }
       }
     }
     if (parent && parent !== node) parent.children.push(node);
-    else roots.push(node);
+    else hanging.push(node);
   }
-  return roots;
+
+  if (library) return [{ folder: library, children: hanging }];
+  return hanging;
 }
 
 export function FolderTreePanel({
@@ -74,7 +76,19 @@ export function FolderTreePanel({
   const [extra, setExtra] = useState<Record<string, SpItem[]>>({});
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [loadingKey, setLoadingKey] = useState<string | null>(null);
-  const tree = useMemo(() => buildFolderTree(folders), [folders]);
+  const tree = useMemo(() => {
+    const built = buildFolderTree(folders);
+    if (!loadLive) return built;
+    return built.map((node) => (node.folder.id === 0 ? { ...node, children: [] } : node));
+  }, [folders, loadLive]);
+  const assigned = useMemo(() => folders.filter((f) => f.id !== 0), [folders]);
+  const registeredByItem = useMemo(() => {
+    const map = new Map<string, BrowseFolder>();
+    for (const folder of assigned) {
+      if (folder.sp_item_id) map.set(folder.sp_item_id, folder);
+    }
+    return map;
+  }, [assigned]);
 
   async function loadKids(key: string, itemId: string) {
     if (!loadLive || extra[key]) return;
@@ -109,12 +123,14 @@ export function FolderTreePanel({
     depth: number;
   }) {
     const folder = node.folder;
-    const key = folder.sp_item_id || `db-${folder.id}`;
+    const key = folderKey(folder);
     const knownIds = new Set(node.children.map((child) => child.folder.sp_item_id).filter(Boolean));
     const live = (extra[key] ?? []).filter((item) => !knownIds.has(item.id));
     const isOpen = Boolean(expanded[key]);
     const selected = currentKey === key || currentKey === folder.sp_item_id;
     const count = shareCounts?.[`${folder.id}`] ?? 0;
+    const openTarget = folder.id !== 0 ? folder : ancestor;
+    const openTrail = folder.id !== 0 && trail.length === 0 ? [] : trail;
     return (
       <div>
         <div className="flex items-center gap-0.5" style={{ paddingLeft: depth * 14 }}>
@@ -135,11 +151,7 @@ export function FolderTreePanel({
             className={`flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm ${
               selected ? "bg-primary/12 font-medium" : "hover:bg-muted"
             }`}
-            onClick={() => {
-              if (folder.id !== 0 && trail.length === 0) onOpen(folder, []);
-              else if (folder.id !== 0) onOpen(folder, []);
-              else onOpen(ancestor, trail);
-            }}
+            onClick={() => onOpen(openTarget, openTrail)}
           >
             {folder.id === 0 && trail.length === 0 ? (
               <Home className="size-3.5 shrink-0 opacity-70" />
@@ -166,21 +178,30 @@ export function FolderTreePanel({
               />
             ))}
             {live.map((child) => {
-              const nextAncestor = folder.id !== 0 ? folder : ancestor;
+              const registered = registeredByItem.get(child.id);
+              const nextFolder: BrowseFolder = registered ?? {
+                id: 0,
+                name: child.name,
+                sp_item_id: child.id,
+                sp_drive_id: driveId,
+                path: `${normalizePath(folder.path)}/${child.name}`.replace(/^\/+/, ""),
+              };
+              const assignedKids = assigned.filter(
+                (item) => item.sp_item_id !== child.id && parentOf(item.path) === normalizePath(nextFolder.path),
+              );
+              const nextAncestor = nextFolder.id !== 0 ? nextFolder : folder.id !== 0 ? folder : ancestor;
               const nextTrail =
-                folder.id !== 0 ? [{ id: child.id, name: child.name }] : [...trail, { id: child.id, name: child.name }];
+                nextFolder.id !== 0
+                  ? []
+                  : folder.id !== 0
+                    ? [{ id: child.id, name: child.name }]
+                    : [...trail, { id: child.id, name: child.name }];
               return (
                 <Node
                   key={child.id}
                   node={{
-                    folder: {
-                      id: 0,
-                      name: child.name,
-                      sp_item_id: child.id,
-                      sp_drive_id: driveId,
-                      path: `${normalizePath(folder.path)}/${child.name}`.replace(/^\/+/, ""),
-                    },
-                    children: [],
+                    folder: nextFolder,
+                    children: assignedKids.map((item) => ({ folder: item, children: [] })),
                   }}
                   ancestor={nextAncestor}
                   trail={nextTrail}
