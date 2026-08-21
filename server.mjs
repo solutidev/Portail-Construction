@@ -126,7 +126,8 @@ const server = createServer(async (req, res) => {
   } catch (err) {
     res.statusCode = 500;
     res.setHeader("Content-Type", "application/json");
-    res.end(JSON.stringify({ error: err instanceof Error ? err.message : "Server error" }));
+    console.error(err);
+    res.end(JSON.stringify({ error: "Server error" }));
   }
 });
 

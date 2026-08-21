@@ -325,7 +325,8 @@ async function loadSessionUser(req: { headers?: Record<string, unknown> }) {
   if (!token) return null;
   const result = await getPool().query(
     `SELECT u.id, u.name, u.email, u.user_type, u.title, u.phone, u.is_active, u.is_admin,
-            u.avatar_initials, u.locale, u.theme, u.all_clients, u.created_at, s.expires_at
+            u.avatar_initials, u.locale, u.theme, u.all_clients, u.created_at, s.expires_at,
+            COALESCE(s.view_as, 'admin') AS view_as
      FROM sessions s
      JOIN users u ON u.id = s.user_id
      WHERE s.token = $1
@@ -338,7 +339,13 @@ async function loadSessionUser(req: { headers?: Record<string, unknown> }) {
     await revokeDbSession(token);
     return null;
   }
-  return publicUser(row);
+  const user = publicUser(row) as ReturnType<typeof publicUser> & { view_as?: string };
+  user.view_as = String(row.view_as ?? "admin");
+  return user;
+}
+
+function effectiveAdmin(session: { is_admin: number; view_as?: string }) {
+  return Number(session.is_admin) === 1 && (session.view_as ?? "admin") === "admin";
 }
 
 function isAllowedSql(sql: string) {

@@ -30,11 +30,11 @@ function cookieSecureFlag() {
 
 export function sessionCookie(token: string) {
   requireSessionSecret();
-  return `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${MAX_AGE}${cookieSecureFlag()}`;
+  return `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${MAX_AGE}${cookieSecureFlag()}`;
 }
 
 export function clearSessionCookie() {
-  return `${COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${cookieSecureFlag()}`;
+  return `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${cookieSecureFlag()}`;
 }
 
 export function tokenFromCookieHeader(header: string | undefined | null) {
