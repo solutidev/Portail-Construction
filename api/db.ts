@@ -396,6 +396,24 @@ export async function handleDbRequest(req: { method?: string; body?: any; header
       const user = await loadSessionUser(req);
       return res.status(200).json({ user });
     }
+    if (action === "view_as") {
+      const session = await loadSessionUser(req);
+      if (!session) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+      if (Number(session.is_admin) !== 1) {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+      }
+      const mode = String(req.body?.view_as ?? "admin");
+      const viewAs = mode === "staff" || mode === "client" ? mode : "admin";
+      const token = tokenFromCookieHeader(cookieHeaderOf(req));
+      if (token) {
+        await getPool().query("UPDATE sessions SET view_as = $2 WHERE token = $1", [token, viewAs]);
+      }
+      return res.status(200).json({ ok: true, view_as: viewAs });
+    }
     const session = await loadSessionUser(req);
     if (!session) {
       res.status(401).json({ error: "Unauthorized" });
@@ -416,16 +434,23 @@ export async function handleDbRequest(req: { method?: string; body?: any; header
       /\b(users|user_permissions|access_groups|access_group_permissions|user_access_groups|app_settings|sessions)\b/i.test(
         sql,
       );
-    if (mutating && sensitive && Number(session.is_admin) !== 1) {
+    const admin = effectiveAdmin(session);
+    if (mutating && sensitive && !admin) {
       const selfProfile =
         /^\s*update\s+"?users"?\s+set\b/i.test(sql) &&
         /\bid\s*=\s*\$/i.test(sql) &&
         !/\bis_admin\b/i.test(sql) &&
+        !/\ball_clients\b/i.test(sql) &&
         !/\bpassword\b/i.test(sql);
       if (!selfProfile) {
         res.status(403).json({ error: "Forbidden" });
         return;
       }
+    }
+    const reduced = session.user_type === "external" || session.view_as === "client" || session.view_as === "staff";
+    if (reduced && /\b(app_settings|sessions)\b/i.test(sql)) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
     }
     if (mutating && /\bpassword\b/i.test(sql) && /^\s*update\s+"?users"?/i.test(sql)) {
       await revokeUserSessions(session.id);
@@ -434,7 +459,7 @@ export async function handleDbRequest(req: { method?: string; body?: any; header
     res.status(200).json({ rows });
   } catch (err) {
     console.error("db api error", err);
-    res.status(500).json({ error: err instanceof Error ? err.message : "Query failed" });
+    res.status(500).json({ error: "Query failed" });
   }
 }
 

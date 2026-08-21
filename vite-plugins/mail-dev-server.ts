@@ -7,13 +7,7 @@ export function mailDevServer(): Plugin {
     configureServer(server) {
       server.middlewares.use("/api/mail/send", async (req, res) => {
         if (req.method === "OPTIONS") {
-          res.writeHead(204, {
-            "Access-Control-Allow-Origin": req.headers.origin || "",
-            "Access-Control-Allow-Headers": "Content-Type",
-            "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-            "Access-Control-Allow-Credentials": "true",
-            Vary: "Origin",
-          });
+          res.writeHead(204);
           res.end();
           return;
         }

@@ -316,6 +316,7 @@ export const sessions = pgTable("sessions", {
   token: text("token").notNull(),
   user_id: integer("user_id").notNull(),
   expires_at: text("expires_at").notNull(),
+  view_as: text("view_as").notNull().default("admin"),
   created_at: timestamp("created_at").defaultNow().notNull(),
 });
 

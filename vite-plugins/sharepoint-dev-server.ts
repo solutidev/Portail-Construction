@@ -7,11 +7,7 @@ export function sharepointDevServer(): Plugin {
     configureServer(server) {
       server.middlewares.use("/api/sharepoint", async (req, res) => {
         if (req.method === "OPTIONS") {
-          res.writeHead(204, {
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Headers": "Content-Type",
-            "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-          });
+          res.writeHead(204);
           res.end();
           return;
         }

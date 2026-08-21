@@ -2,16 +2,16 @@ import { randomBytes } from "node:crypto";
 
 const COOKIE = "frx_session";
 const MAX_AGE = 60 * 60 * 24 * 7;
+let generatedDevSecret: string | null = null;
 
 export function requireSessionSecret() {
   const value = process.env.SESSION_SECRET?.trim();
-  if (!value || value.length < 16) {
-    if (process.env.NODE_ENV === "production") {
-      throw new Error("SESSION_SECRET is required (min 16 characters). Do not reuse POSTGRES_PASSWORD.");
-    }
-    return "dev-preview-session-secret";
+  if (value && value.length >= 16) return value;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("SESSION_SECRET is required (min 16 characters). Do not reuse POSTGRES_PASSWORD.");
   }
-  return value;
+  if (!generatedDevSecret) generatedDevSecret = randomBytes(32).toString("hex");
+  return generatedDevSecret;
 }
 
 export function newSessionToken() {
@@ -24,19 +24,17 @@ export function sessionMaxAgeSeconds() {
 }
 
 function cookieSecureFlag() {
-  // Only mark Secure when the site is actually served over HTTPS.
-  // NODE_ENV=production on http://server-ip:8080 would otherwise drop the cookie.
-  if (process.env.COOKIE_SECURE === "1" || process.env.COOKIE_SECURE === "true") return "; Secure";
-  return "";
+  if (process.env.COOKIE_INSECURE === "1" || process.env.COOKIE_INSECURE === "true") return "";
+  return "; Secure";
 }
 
 export function sessionCookie(token: string) {
   requireSessionSecret();
-  return `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${MAX_AGE}${cookieSecureFlag()}`;
+  return `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${MAX_AGE}${cookieSecureFlag()}`;
 }
 
 export function clearSessionCookie() {
-  return `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${cookieSecureFlag()}`;
+  return `${COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${cookieSecureFlag()}`;
 }
 
 export function tokenFromCookieHeader(header: string | undefined | null) {
@@ -53,4 +51,17 @@ export function cookieHeaderOf(req: { headers?: Record<string, unknown> | { cook
   if (!headers) return "";
   const raw = headers.cookie ?? headers.Cookie;
   return typeof raw === "string" ? raw : "";
+}
+
+export function originAllowed(req: { headers?: Record<string, unknown> }) {
+  const headers = req.headers as Record<string, unknown> | undefined;
+  if (!headers) return true;
+  const origin = typeof headers.origin === "string" ? headers.origin : "";
+  if (!origin) return true;
+  const host = typeof headers.host === "string" ? headers.host : "";
+  try {
+    return new URL(origin).host === host;
+  } catch {
+    return false;
+  }
 }

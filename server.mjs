@@ -93,13 +93,7 @@ const server = createServer(async (req, res) => {
   const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
   try {
     if (req.method === "OPTIONS" && url.pathname.startsWith("/api/")) {
-      res.writeHead(204, {
-        "Access-Control-Allow-Origin": req.headers.origin || "",
-        "Access-Control-Allow-Headers": "Content-Type",
-        "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-        "Access-Control-Allow-Credentials": "true",
-        Vary: "Origin",
-      });
+      res.writeHead(204);
       res.end();
       return;
     }

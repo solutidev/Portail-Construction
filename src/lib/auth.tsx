@@ -238,6 +238,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setViewAsState(mode);
       if (mode === "admin") localStorage.removeItem(VIEW_AS_KEY);
       else localStorage.setItem(VIEW_AS_KEY, mode);
+      void fetch("/api/db", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "view_as", view_as: mode }),
+      });
       if (realUser) void loadPermissions(realUser.id, mode, Boolean(realUser.is_admin));
     },
     [realUser, loadPermissions],

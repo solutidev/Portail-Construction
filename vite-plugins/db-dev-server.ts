@@ -5,18 +5,9 @@ export function dbDevServer(): Plugin {
   return {
     name: "db-dev-server",
     configureServer(server) {
-      if (!process.env.SESSION_SECRET) {
-        process.env.SESSION_SECRET = "dev-preview-session-secret";
-      }
       server.middlewares.use("/api/db", async (req, res) => {
         if (req.method === "OPTIONS") {
-          res.writeHead(204, {
-            "Access-Control-Allow-Origin": req.headers.origin || "",
-            "Access-Control-Allow-Headers": "Content-Type",
-            "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-            "Access-Control-Allow-Credentials": "true",
-            Vary: "Origin",
-          });
+          res.writeHead(204);
           res.end();
           return;
         }
