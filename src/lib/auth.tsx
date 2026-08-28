@@ -228,6 +228,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setPermissions([]);
     localStorage.removeItem(SESSION_KEY);
     localStorage.removeItem(VIEW_AS_KEY);
+    try {
+      Object.keys(sessionStorage)
+        .filter((key) => key.startsWith("frx_portal_tutorial_later_"))
+        .forEach((key) => sessionStorage.removeItem(key));
+    } catch {
+      /* ignore */
+    }
     void fetch("/api/db", {
       method: "POST",
       credentials: "include",

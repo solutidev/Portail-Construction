@@ -387,10 +387,10 @@ export const fr: Record<MessageKey, string> = {
   "tour.step.accounting.body": "Soumissions, factures et paiements pour tous les clients.",
   "tour.step.setup.title": "Configuration",
   "tour.step.setup.body": "Les administrateurs gèrent ici les utilisateurs, groupes, entreprise et courriel.",
-  "tour.step.profile.title": "Votre profil",
-  "tour.step.profile.body": "Mettez à jour votre nom, langue, thème et mot de passe en tout temps.",
   "tour.step.reports.title": "Rapports",
-  "tour.step.reports.body": "Créez et exportez des livrets de projet pour les clients et les revues internes.",
+  "tour.step.reports.body": "Créez des livrets et des résumés à partir des données de projet.",
+  "tour.step.profile.title": "Votre profil",
+  "tour.step.profile.body": "Mettez à jour votre nom, langue, thème et mot de passe depuis le menu d’en-tête.",
 
   "project.nav.dashboard": "Aperçu",
   "project.nav.calendar": "Calendrier",

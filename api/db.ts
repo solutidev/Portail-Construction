@@ -97,7 +97,7 @@ export async function loginUser(email: string, password: string) {
   await ensureSchema();
   await ensureDemoUsers();
   const result = await getPool().query(
-    `SELECT id, name, email, user_type, title, phone, is_active, is_admin, avatar_initials, locale, theme, all_clients, created_at, password
+    `SELECT id, name, email, user_type, title, phone, is_active, is_admin, avatar_initials, locale, theme, all_clients, must_change_password, tutorial_done, created_at, password
      FROM users
      WHERE lower(email) = lower($1)
      LIMIT 1`,
@@ -144,6 +144,8 @@ const PUBLIC_USER_COLUMNS = [
   "locale",
   "theme",
   "all_clients",
+  "must_change_password",
+  "tutorial_done",
   "created_at",
 ] as const;
 

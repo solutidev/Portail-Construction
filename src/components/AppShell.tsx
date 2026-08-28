@@ -654,6 +654,8 @@ export function AppShell() {
           </div>
         </main>
       </div>
+      <ForcePasswordDialog />
+      <MenuTour />
     </div>
   );
 }
