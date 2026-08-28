@@ -45,7 +45,7 @@ function isSetupTab(value: string | null): value is SetupTab {
 }
 
 export function ConfigSettingsPage() {
-  const { user, realUser } = useAuth();
+  const { user } = useAuth();
   const { t } = useI18n();
   const [params, setParams] = useSearchParams();
   const [loading, setLoading] = useState(true);

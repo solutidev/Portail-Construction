@@ -425,7 +425,7 @@ function ClientNav({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
-  const { user, logout } = useAuth();
+  const { user, realUser, logout } = useAuth();
   const { t } = useI18n();
   const navigate = useNavigate();
   const location = useLocation();
