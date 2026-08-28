@@ -26,12 +26,24 @@ Open host port **8080** (or change `PORT` later).
 
 ## Wipe production for a clean slate
 
-This **deletes all Postgres data** (clients, projects, users except what seed recreates). Then the app starts with **only**:
+A normal `update.sh` **keeps** Postgres data. Demo clients/projects stay until you reset.
+
+**Preferred (keep the volume, wipe rows only):**
+
+```bash
+cd /opt/frx-portal
+sudo bash scripts/update.sh
+sudo bash scripts/reset-data.sh
+```
+
+Type `RESET` when asked. You get only:
 
 - Email: `admin@frxconstruction.ca`
 - Password: `admin123`
 
 Sign in, create your real admin, then delete this default account.
+
+**Nuclear (delete the whole Postgres volume):**
 
 ```bash
 cd /opt/frx-portal
@@ -39,9 +51,7 @@ sudo docker compose down -v
 sudo bash scripts/update.sh
 ```
 
-`down -v` removes the database volume. `update.sh` pulls `main` and rebuilds. Hard-refresh the browser, then log in with the default admin.
-
-Do **not** run `down -v` for a normal update — that wipes data.
+Do **not** run `down -v` for a normal update.
 
 ## 1. Remove any previous broken install
 
