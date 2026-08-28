@@ -56,6 +56,7 @@ type AuthContextValue = {
   }) => Promise<void>;
   changePassword: (current: string, next: string) => Promise<string | null>;
   completeTutorial: () => Promise<void>;
+  setTutorialOnLogin: (show: boolean) => Promise<void>;
   can: (module: ModuleId, action: Action, scope?: { projectId?: number; clientId?: number }) => boolean;
 };
 
@@ -358,6 +359,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [realUser]);
 
+  const setTutorialOnLogin = useCallback(
+    async (show: boolean) => {
+      if (!realUser) return;
+      const tutorial_done = show ? 0 : 1;
+      setRealUser({ ...realUser, tutorial_done });
+      try {
+        if (show) {
+          localStorage.removeItem(`${TUTORIAL_KEY}_done_${realUser.id}`);
+          sessionStorage.setItem(`${TUTORIAL_KEY}_later_${realUser.id}`, "1");
+        } else {
+          localStorage.setItem(`${TUTORIAL_KEY}_done_${realUser.id}`, "1");
+        }
+      } catch {
+        /* ignore */
+      }
+      try {
+        await fetch("/api/set-tutorial", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tutorial_done }),
+        });
+      } catch {
+        /* persisted locally */
+      }
+    },
+    [realUser],
+  );
+
   const canFn = useCallback(
     (module: ModuleId, action: Action, scope?: { projectId?: number; clientId?: number }) =>
       can(user, permissions, module, action, scope),
@@ -380,9 +410,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       updateProfile,
       changePassword,
       completeTutorial,
+      setTutorialOnLogin,
       can: canFn,
     }),
-    [user, realUser, viewAs, setViewAs, permissions, ready, login, needsSetup, setupAdmin, logout, refreshPermissions, updateProfile, changePassword, completeTutorial, canFn],
+    [user, realUser, viewAs, setViewAs, permissions, ready, login, needsSetup, setupAdmin, logout, refreshPermissions, updateProfile, changePassword, completeTutorial, setTutorialOnLogin, canFn],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

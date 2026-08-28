@@ -8,11 +8,12 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Locale, ThemePref } from "@/lib/types";
 
 export function ProfilePage() {
-  const { user, updateProfile, changePassword } = useAuth();
+  const { user, realUser, updateProfile, changePassword, setTutorialOnLogin } = useAuth();
   const { t, locale, setLocale } = useI18n();
   const { theme, setTheme } = useTheme();
 
@@ -174,6 +175,23 @@ export function ProfilePage() {
                   </button>
                 ))}
               </div>
+            </CardContent>
+          </Card>
+
+          <Card className="py-0">
+            <CardHeader className="border-b px-5 py-4">
+              <CardTitle className="text-base">{t("profile.tutorial")}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 px-5 py-5">
+              <p className="text-sm text-muted-foreground">{t("profile.tutorialHint")}</p>
+              <label className="flex items-center justify-between gap-3 rounded-md border px-3 py-2.5">
+                <span className="text-sm font-medium">{t("profile.tutorialToggle")}</span>
+                <Switch
+                  checked={!realUser?.tutorial_done}
+                  onCheckedChange={(checked) => void setTutorialOnLogin(checked)}
+                  aria-label={t("profile.tutorialToggle")}
+                />
+              </label>
             </CardContent>
           </Card>
         </div>

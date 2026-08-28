@@ -117,6 +117,30 @@ const server = createServer(async (req, res) => {
       await dbHandler({ method: req.method, body, headers }, adaptRes(res));
       return;
     }
+    if (url.pathname === "/api/change-password") {
+      const body = req.method === "POST" ? await readJsonBody(req) : {};
+      await dbHandler(
+        { method: "POST", body: { ...body, action: "change_password" }, headers, query: { action: "change_password" } },
+        adaptRes(res),
+      );
+      return;
+    }
+    if (url.pathname === "/api/complete-tutorial") {
+      const body = req.method === "POST" ? await readJsonBody(req) : {};
+      await dbHandler(
+        { method: "POST", body: { ...body, action: "complete_tutorial" }, headers, query: { action: "complete_tutorial" } },
+        adaptRes(res),
+      );
+      return;
+    }
+    if (url.pathname === "/api/set-tutorial") {
+      const body = req.method === "POST" ? await readJsonBody(req) : {};
+      await dbHandler(
+        { method: "POST", body: { ...body, action: "set_tutorial" }, headers, query: { action: "set_tutorial" } },
+        adaptRes(res),
+      );
+      return;
+    }
     if (url.pathname === "/healthz") {
       res.setHeader("Content-Type", "application/json");
       res.end(JSON.stringify({ ok: true }));

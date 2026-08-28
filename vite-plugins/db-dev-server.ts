@@ -64,6 +64,14 @@ export function dbDevServer(): Plugin {
         }
         await run(req, res, "complete_tutorial");
       });
+      server.middlewares.use("/api/set-tutorial", async (req, res) => {
+        if (req.method === "OPTIONS") {
+          res.writeHead(204);
+          res.end();
+          return;
+        }
+        await run(req, res, "set_tutorial");
+      });
       server.middlewares.use("/api/db", async (req, res) => {
         if (req.method === "OPTIONS") {
           res.writeHead(204);

@@ -462,7 +462,7 @@ export async function handleDbRequest(req: { method?: string; body?: any; header
       ]);
       return res.status(200).json({ ok: true });
     }
-    if (action === "complete_tutorial") {
+    if (action === "complete_tutorial" || action === "set_tutorial") {
       if (!hasRemoteDb()) {
         return res.status(200).json({ local: true });
       }
@@ -471,8 +471,12 @@ export async function handleDbRequest(req: { method?: string; body?: any; header
         res.status(401).json({ error: "Unauthorized" });
         return;
       }
-      await getPool().query(`UPDATE users SET tutorial_done=1 WHERE id=$1`, [session.id]);
-      return res.status(200).json({ ok: true });
+      const done =
+        action === "complete_tutorial"
+          ? 1
+          : Number(req.body?.tutorial_done ?? req.body?.done ?? 1) ? 1 : 0;
+      await getPool().query(`UPDATE users SET tutorial_done=$2 WHERE id=$1`, [session.id, done]);
+      return res.status(200).json({ ok: true, tutorial_done: done });
     }
     if (action === "view_as") {
       if (!hasRemoteDb()) {
