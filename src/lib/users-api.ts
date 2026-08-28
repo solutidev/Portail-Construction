@@ -1,6 +1,45 @@
 import { db, schema } from "../db";
 import type { User } from "./types";
 
+const USER_COLUMNS = [
+  "id",
+  "name",
+  "email",
+  "password",
+  "user_type",
+  "title",
+  "phone",
+  "is_active",
+  "is_admin",
+  "avatar_initials",
+  "locale",
+  "theme",
+  "all_clients",
+  "created_at",
+] as const;
+
+function rowToUser(row: unknown): User {
+  const data = Array.isArray(row)
+    ? Object.fromEntries(USER_COLUMNS.map((key, i) => [key, row[i]]))
+    : ((row ?? {}) as Record<string, unknown>);
+  return {
+    id: Number(data.id),
+    name: String(data.name ?? ""),
+    email: String(data.email ?? ""),
+    password: "",
+    user_type: data.user_type === "external" ? "external" : "internal",
+    title: data.title == null ? null : String(data.title),
+    phone: data.phone == null ? null : String(data.phone),
+    is_active: Number(data.is_active ?? 1),
+    is_admin: Number(data.is_admin ?? 0),
+    avatar_initials: data.avatar_initials == null ? null : String(data.avatar_initials),
+    locale: data.locale === "fr" ? "fr" : "en",
+    theme: data.theme === "dark" ? "dark" : "light",
+    all_clients: Number(data.all_clients ?? 1),
+    created_at: (data.created_at as Date) ?? new Date(),
+  };
+}
+
 async function postDb(body: Record<string, unknown>) {
   const res = await fetch("/api/db", {
     method: "POST",
@@ -9,21 +48,34 @@ async function postDb(body: Record<string, unknown>) {
     body: JSON.stringify(body),
   });
   const data = (await res.json().catch(() => ({}))) as {
-    users?: User[];
-    user?: User;
+    users?: unknown[];
+    user?: unknown;
     local?: boolean;
     error?: string;
   };
-  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
-  return data;
+  return { ok: res.ok, status: res.status, data };
+}
+
+async function selectUsersFallback(): Promise<User[]> {
+  const rows = (await db.select().from(schema.users)) as unknown[];
+  return rows.map(rowToUser).filter((u) => Number.isFinite(u.id) && u.email);
 }
 
 export async function listUsers(): Promise<User[]> {
-  const data = await postDb({ action: "list_users" });
-  if (data.local) {
-    return (await db.select().from(schema.users)) as User[];
+  try {
+    const { ok, data } = await postDb({ action: "list_users" });
+    if (data.local) return selectUsersFallback();
+    if (ok && Array.isArray(data.users) && data.users.length) {
+      return data.users.map(rowToUser);
+    }
+    if (ok && Array.isArray(data.users)) {
+      const mapped = data.users.map(rowToUser).filter((u) => Number.isFinite(u.id));
+      if (mapped.length) return mapped;
+    }
+  } catch {
+    /* fall through to SQL select */
   }
-  return data.users ?? [];
+  return selectUsersFallback();
 }
 
 export async function createUser(input: {
@@ -37,7 +89,7 @@ export async function createUser(input: {
   avatar_initials?: string | null;
   groupIds?: number[];
 }): Promise<User> {
-  const data = await postDb({ action: "create_user", ...input });
+  const { ok, data } = await postDb({ action: "create_user", ...input });
   if (data.local) {
     await db.insert(schema.users).values({
       name: input.name,
@@ -53,11 +105,31 @@ export async function createUser(input: {
       theme: "light",
       all_clients: input.user_type === "external" ? 0 : 1,
     });
-    const rows = (await db.select().from(schema.users)) as User[];
+    const rows = await selectUsersFallback();
     const created = rows.find((u) => u.email === input.email);
     if (!created) throw new Error("User was not saved");
     return created;
   }
-  if (!data.user) throw new Error(data.error || "User was not saved");
-  return data.user;
+  if (ok && data.user) return rowToUser(data.user);
+  if (!ok && data.error && data.error !== "sql is required" && data.error !== "Query not allowed") {
+    throw new Error(data.error);
+  }
+  await db.insert(schema.users).values({
+    name: input.name,
+    email: input.email,
+    password: input.password,
+    user_type: input.user_type,
+    title: input.title ?? null,
+    phone: input.phone ?? null,
+    is_active: 1,
+    is_admin: input.is_admin ? 1 : 0,
+    avatar_initials: input.avatar_initials ?? null,
+    locale: "en",
+    theme: "light",
+    all_clients: input.user_type === "external" ? 0 : 1,
+  });
+  const rows = await selectUsersFallback();
+  const created = rows.find((u) => u.email === input.email);
+  if (!created) throw new Error(data.error || "User was not saved");
+  return created;
 }

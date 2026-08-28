@@ -53,12 +53,17 @@ export function ConfigInternalUsersPage({ embedded = false }: { embedded?: boole
   const [formError, setFormError] = useState<string | null>(null);
 
   async function load() {
-    await dbReady;
-    const rows = await listUsers();
-    setPeople(rows.filter((p) => String(p.user_type) !== "external"));
-    setGroups((await db.select().from(schema.access_groups)) as AccessGroup[]);
-    setMemberships((await db.select().from(schema.user_access_groups)) as UserAccessGroup[]);
-    setLoading(false);
+    try {
+      await dbReady;
+      const rows = await listUsers();
+      setPeople(rows.filter((p) => p.user_type !== "external"));
+      setGroups((await db.select().from(schema.access_groups)) as AccessGroup[]);
+      setMemberships((await db.select().from(schema.user_access_groups)) as UserAccessGroup[]);
+    } catch (err) {
+      console.error("load users failed", err);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {

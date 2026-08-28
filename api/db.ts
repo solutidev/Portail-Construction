@@ -272,6 +272,7 @@ export async function handleDbRequest(req: { method?: string; body?: any; header
         res.status(403).json({ error: "Forbidden" });
         return;
       }
+      await ensureSchema();
       const result = await getPool().query(
         `SELECT id, name, email, user_type, title, phone, is_active, is_admin, avatar_initials, locale, theme, all_clients, created_at
          FROM users
