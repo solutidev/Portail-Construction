@@ -39,6 +39,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export function PunchPage() {
   const { user } = useAuth();
@@ -152,7 +159,13 @@ function ClockView({
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [blockOpen, setBlockOpen] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+
+  function blockPunch(message: string) {
+    setError(message);
+    setBlockOpen(true);
+  }
 
   useEffect(() => {
     if (open) setProjectId(String(open.project_id));
@@ -174,7 +187,7 @@ function ClockView({
     setError(null);
     try {
       if (selected.require_geofence && !projectFence(selected)) {
-        setError(t("punch.geo.missingPin"));
+        blockPunch(t("punch.geo.missingPin"));
         setBusy(false);
         return;
       }
@@ -191,7 +204,7 @@ function ClockView({
         accuracy = pos.coords.accuracy ?? null;
         distance = haversineMeters({ lat, lng }, { lat: fence.lat, lng: fence.lng });
         if (distance > fence.radius) {
-          setError(t("punch.outsideFence", { meters: String(distance), radius: String(fence.radius) }));
+          blockPunch(t("punch.outsideFence", { meters: String(distance), radius: String(fence.radius) }));
           setBusy(false);
           return;
         }
@@ -220,7 +233,7 @@ function ClockView({
     } catch (err) {
       const message = err instanceof Error ? err.message : "";
       if (message.includes("geolocation") || message === "geolocation-unavailable") {
-        setError(t("punch.needLocation"));
+        blockPunch(t("punch.needLocation"));
       } else {
         setError(t("punch.failed"));
       }
@@ -261,7 +274,22 @@ function ClockView({
           <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("punch.notePlaceholder")} rows={3} />
         </div>
 
-        {error ? <p className="text-sm text-destructive">{error}</p> : null}
+        {error && !blockOpen ? <p className="text-sm text-destructive">{error}</p> : null}
+
+        <Dialog open={blockOpen} onOpenChange={setBlockOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-destructive">
+                <MapPin className="size-5" />
+                {t("punch.blockedTitle")}
+              </DialogTitle>
+            </DialogHeader>
+            <p className="text-base leading-relaxed">{error}</p>
+            <DialogFooter>
+              <Button onClick={() => setBlockOpen(false)}>{t("punch.blockedOk")}</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <div className="flex flex-wrap gap-2">
           {open ? (

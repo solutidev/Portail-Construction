@@ -813,6 +813,8 @@ export const en = {
   "punch.anywhere": "This job allows punch from anywhere.",
   "punch.fenceHint": "Must punch within {meters} m of the jobsite.",
   "punch.outsideFence": "You are {meters} m from the site. Allowed radius is {radius} m.",
+  "punch.blockedTitle": "Punch blocked",
+  "punch.blockedOk": "Understood",
   "punch.needLocation": "Location is required for this job. Allow location access and try again.",
   "punch.failed": "Could not save the punch.",
   "punch.restricted": "Restricted",

@@ -815,6 +815,8 @@ export const fr: Record<MessageKey, string> = {
   "punch.anywhere": "Ce chantier permet de pointer de n’importe où.",
   "punch.fenceHint": "Doit pointer à moins de {meters} m du chantier.",
   "punch.outsideFence": "Vous êtes à {meters} m. Le rayon autorisé est {radius} m.",
+  "punch.blockedTitle": "Pointage refusé",
+  "punch.blockedOk": "Compris",
   "punch.needLocation": "La position est requise pour ce chantier. Autorisez la localisation.",
   "punch.failed": "Impossible d’enregistrer le pointage.",
   "punch.restricted": "Accès restreint",
