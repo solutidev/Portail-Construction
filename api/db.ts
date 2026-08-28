@@ -231,6 +231,9 @@ export async function handleDbRequest(req: { method?: string; body?: any; header
       return;
     }
     if (action === "login") {
+      if (!hasRemoteDb()) {
+        return res.status(200).json({ error: "login.local" });
+      }
       const result = await loginUser(String(req.body?.email ?? ""), String(req.body?.password ?? ""));
       if ("user" in result && result.user) {
         const token = await createDbSession(Number(result.user.id));
@@ -306,7 +309,7 @@ export async function handleDbRequest(req: { method?: string; body?: any; header
       }
     }
     const reduced = session.user_type === "external" || session.view_as === "client" || session.view_as === "staff";
-    if (reduced && /\b(app_settings|sessions)\b/i.test(sql)) {
+    if (reduced && mutating && /\b(app_settings|sessions)\b/i.test(sql)) {
       res.status(403).json({ error: "Forbidden" });
       return;
     }

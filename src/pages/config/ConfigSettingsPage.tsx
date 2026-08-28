@@ -45,7 +45,7 @@ function isSetupTab(value: string | null): value is SetupTab {
 }
 
 export function ConfigSettingsPage() {
-  const { user } = useAuth();
+  const { user, realUser } = useAuth();
   const { t } = useI18n();
   const [params, setParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
@@ -65,12 +65,17 @@ export function ConfigSettingsPage() {
 
   useEffect(() => {
     void (async () => {
-      setCompany(await getCompanyProfile());
-      setSmtp(await getSmtpSettings());
-      setQb(await getQuickBooksSettings());
-      setSp(await getSharePointSettings());
-      setTemplates(await getEmailTemplates());
-      setLoading(false);
+      try {
+        setCompany(await getCompanyProfile());
+        setSmtp(await getSmtpSettings());
+        setQb(await getQuickBooksSettings());
+        setSp(await getSharePointSettings());
+        setTemplates(await getEmailTemplates());
+      } catch (err) {
+        console.error("settings load failed", err);
+      } finally {
+        setLoading(false);
+      }
     })();
   }, []);
 

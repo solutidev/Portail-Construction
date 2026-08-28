@@ -61,19 +61,27 @@ export function PunchPage() {
   const [tab, setTab] = useState(isAdmin ? "overview" : "clock");
 
   async function load() {
-    if (!user) return;
-    await dbReady;
-    const mine = await loadUserPunches(user.id);
-    setMyPunches(mine);
-    const current = await openPunchForUser(user.id);
-    setOpen(current);
-    if (isAdmin) {
-      setAllPunches(await loadAllPunches());
-      setPeople(((await db.select().from(schema.users)) as User[]).filter((p) => p.user_type === "internal"));
-      const members = (await db.select().from(schema.project_members)) as { project_id: number; user_id: number }[];
-      setMemberRows(members);
+    if (!user) {
+      setLoading(false);
+      return;
     }
-    setLoading(false);
+    try {
+      await dbReady;
+      const mine = await loadUserPunches(user.id);
+      setMyPunches(mine);
+      const current = await openPunchForUser(user.id);
+      setOpen(current);
+      if (isAdmin) {
+        setAllPunches(await loadAllPunches());
+        setPeople(((await db.select().from(schema.users)) as User[]).filter((p) => p.user_type === "internal"));
+        const members = (await db.select().from(schema.project_members)) as { project_id: number; user_id: number }[];
+        setMemberRows(members);
+      }
+    } catch (err) {
+      console.error("punch load failed", err);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {

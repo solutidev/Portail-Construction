@@ -48,15 +48,23 @@ export function TimesheetsPage() {
 
   useEffect(() => {
     void (async () => {
-      if (!user) return;
-      await dbReady;
-      if (isAdmin) {
-        setPeople(((await db.select().from(schema.users)) as User[]).filter((p) => p.user_type === "internal"));
-        setPunches(await loadAllPunches());
-      } else {
-        setPunches(await loadUserPunches(user.id));
+      if (!user) {
+        setLoading(false);
+        return;
       }
-      setLoading(false);
+      try {
+        await dbReady;
+        if (isAdmin) {
+          setPeople(((await db.select().from(schema.users)) as User[]).filter((p) => p.user_type === "internal"));
+          setPunches(await loadAllPunches());
+        } else {
+          setPunches(await loadUserPunches(user.id));
+        }
+      } catch (err) {
+        console.error("timesheet load failed", err);
+      } finally {
+        setLoading(false);
+      }
     })();
   }, [user?.id, isAdmin]);
 

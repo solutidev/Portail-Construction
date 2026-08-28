@@ -125,22 +125,27 @@ export function AccountingBillingPage() {
   const mailReady = smtp ? smtpIsReady(smtp) : false;
 
   async function load() {
-    await dbReady;
-    const bills = (await db.select().from(schema.billing_documents)) as BillingDocument[];
-    const cos = (await db.select().from(schema.clients)) as Client[];
-    const jobs = (await db.select().from(schema.projects)) as Project[];
-    const visibleIds = new Set(clients.map((c) => c.id));
-    const scoped = user?.is_admin ? bills : bills.filter((d) => visibleIds.has(d.client_id));
-    setDocs(scoped.sort((a, b) => String(b.issued_on ?? "").localeCompare(String(a.issued_on ?? ""))));
-    setAllClients(user?.is_admin ? cos : cos.filter((c) => visibleIds.has(c.id)));
-    setAllProjects(user?.is_admin ? jobs : jobs.filter((p) => visibleIds.has(p.client_id)));
-    setCompany(await getCompanyProfile());
-    setSmtp(await getSmtpSettings());
-    setQb(await getQuickBooksSettings());
-    setPunches(await loadAllPunches());
-    setPeople(((await db.select().from(schema.users)) as User[]).filter((p) => p.user_type === "internal"));
-    setTemplates(await getEmailTemplates());
-    setLoading(false);
+    try {
+      await dbReady;
+      const bills = (await db.select().from(schema.billing_documents)) as BillingDocument[];
+      const cos = (await db.select().from(schema.clients)) as Client[];
+      const jobs = (await db.select().from(schema.projects)) as Project[];
+      const visibleIds = new Set(clients.map((c) => c.id));
+      const scoped = user?.is_admin ? bills : bills.filter((d) => visibleIds.has(d.client_id));
+      setDocs(scoped.sort((a, b) => String(b.issued_on ?? "").localeCompare(String(a.issued_on ?? ""))));
+      setAllClients(user?.is_admin ? cos : cos.filter((c) => visibleIds.has(c.id)));
+      setAllProjects(user?.is_admin ? jobs : jobs.filter((p) => visibleIds.has(p.client_id)));
+      setCompany(await getCompanyProfile());
+      setSmtp(await getSmtpSettings());
+      setQb(await getQuickBooksSettings());
+      setPunches(await loadAllPunches());
+      setPeople(((await db.select().from(schema.users)) as User[]).filter((p) => p.user_type === "internal"));
+      setTemplates(await getEmailTemplates());
+    } catch (err) {
+      console.error("billing load failed", err);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {

@@ -430,7 +430,7 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { projectMode } = useWorkspace();
-  const isAdmin = Boolean(user?.is_admin);
+  const isAdmin = Boolean(realUser?.is_admin);
   const isClient = user?.user_type === "external";
   const onSetup = location.pathname.startsWith("/settings") || location.pathname.startsWith("/config/settings");
 
