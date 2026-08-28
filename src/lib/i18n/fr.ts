@@ -371,7 +371,7 @@ export const fr: Record<MessageKey, string> = {
   "tour.title": "Un tour rapide du menu",
   "tour.next": "Suivant",
   "tour.done": "Terminer",
-  "tour.later": "Passer jusqu’à la prochaine connexion",
+  "tour.later": "Afficher à la prochaine connexion",
   "tour.never": "Ne plus afficher",
   "tour.step.dashboard.title": "Tableau de bord",
   "tour.step.dashboard.body": "Votre accueil : chantiers, activité et un aperçu du travail en cours.",

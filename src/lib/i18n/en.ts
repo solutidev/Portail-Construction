@@ -369,7 +369,7 @@ export const en = {
   "tour.title": "A quick tour of the menu",
   "tour.next": "Next",
   "tour.done": "Done",
-  "tour.later": "Skip until next login",
+  "tour.later": "Show again next login",
   "tour.never": "Do not show anymore",
   "tour.step.dashboard.title": "Dashboard",
   "tour.step.dashboard.body": "Your home screen for the selected client: jobs, activity, and quick status.",

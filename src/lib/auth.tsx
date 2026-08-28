@@ -284,30 +284,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (current: string, next: string) => {
       if (!realUser) return "login.error.invalid";
       if (next.trim().length < 8) return "profile.passwordShort";
-      try {
-        const res = await fetch("/api/db", {
+      const res = await fetch("/api/change-password", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ current, next }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string; local?: boolean; ok?: boolean };
+      if (data.error === "sql is required") {
+        const retry = await fetch("/api/db?action=change_password", {
           method: "POST",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "change_password", current, next }),
         });
-        const data = (await res.json().catch(() => ({}))) as { error?: string; local?: boolean };
-        if (!data.local && res.ok) {
+        const retryData = (await retry.json().catch(() => ({}))) as { error?: string; local?: boolean; ok?: boolean };
+        if (retryData.error === "profile.passwordWrong" || retryData.error === "profile.passwordShort") {
+          return retryData.error;
+        }
+        if (retry.ok && (retryData.ok || retryData.local || !retryData.error)) {
+          if (retryData.local) {
+            const rows = await db.select().from(schema.users).where(eq(schema.users.id, realUser.id));
+            if (!rows[0] || !(await verifyPassword(current, rows[0].password))) return "profile.passwordWrong";
+            await db
+              .update(schema.users)
+              .set({ password: await hashPassword(next), must_change_password: 0 })
+              .where(eq(schema.users.id, realUser.id));
+          }
           setRealUser({ ...realUser, must_change_password: 0 });
           return null;
         }
-        if (!data.local && !res.ok) return String(data.error || "profile.passwordWrong");
-      } catch {
-        /* local fallback */
+        return "profile.passwordWrong";
       }
-      const rows = await db.select().from(schema.users).where(eq(schema.users.id, realUser.id));
-      if (!rows[0] || !(await verifyPassword(current, rows[0].password))) return "profile.passwordWrong";
-      await db
-        .update(schema.users)
-        .set({ password: await hashPassword(next), must_change_password: 0 })
-        .where(eq(schema.users.id, realUser.id));
-      setRealUser({ ...realUser, must_change_password: 0 });
-      return null;
+      if (data.error === "profile.passwordWrong" || data.error === "profile.passwordShort") return data.error;
+      if (res.ok && (data.ok || data.local || !data.error)) {
+        if (data.local) {
+          try {
+            const rows = await db.select().from(schema.users).where(eq(schema.users.id, realUser.id));
+            if (!rows[0] || !(await verifyPassword(current, rows[0].password))) return "profile.passwordWrong";
+            await db
+              .update(schema.users)
+              .set({ password: await hashPassword(next), must_change_password: 0 })
+              .where(eq(schema.users.id, realUser.id));
+          } catch {
+            return "profile.passwordWrong";
+          }
+        }
+        setRealUser({ ...realUser, must_change_password: 0 });
+        return null;
+      }
+      return "profile.passwordWrong";
     },
     [realUser],
   );
@@ -316,22 +342,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!realUser) return;
     setRealUser({ ...realUser, tutorial_done: 1 });
     try {
-      const res = await fetch("/api/db", {
+      localStorage.setItem(`${TUTORIAL_KEY}_done_${realUser.id}`, "1");
+    } catch {
+      /* ignore */
+    }
+    try {
+      await fetch("/api/complete-tutorial", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "complete_tutorial" }),
+        body: JSON.stringify({}),
       });
-      const data = (await res.json().catch(() => ({}))) as { local?: boolean };
-      if (data.local) {
-        await db.update(schema.users).set({ tutorial_done: 1 }).where(eq(schema.users.id, realUser.id));
-      }
     } catch {
-      try {
-        await db.update(schema.users).set({ tutorial_done: 1 }).where(eq(schema.users.id, realUser.id));
-      } catch {
-        /* ignore */
-      }
+      /* persisted locally */
     }
   }, [realUser]);
 

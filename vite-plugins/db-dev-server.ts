@@ -5,12 +5,7 @@ export function dbDevServer(): Plugin {
   return {
     name: "db-dev-server",
     configureServer(server) {
-      server.middlewares.use("/api/db", async (req, res) => {
-        if (req.method === "OPTIONS") {
-          res.writeHead(204);
-          res.end();
-          return;
-        }
+      const run = async (req: any, res: any, forceAction?: string) => {
         const chunks: Buffer[] = [];
         for await (const chunk of req) chunks.push(chunk as Buffer);
         let body: Record<string, unknown> = {};
@@ -21,6 +16,7 @@ export function dbDevServer(): Plugin {
             body = {};
           }
         }
+        if (forceAction) body.action = forceAction;
         const fakeRes = {
           statusCode: 200,
           headers: {} as Record<string, string>,
@@ -40,7 +36,41 @@ export function dbDevServer(): Plugin {
             res.end(payload as Buffer | string | undefined);
           },
         };
-        await handler({ method: req.method, body, headers: { cookie: req.headers.cookie || "" } }, fakeRes);
+        await handler(
+          {
+            method: req.method,
+            body,
+            headers: { cookie: req.headers.cookie || "" },
+            query: forceAction ? { action: forceAction } : {},
+            url: req.url,
+          },
+          fakeRes,
+        );
+      };
+
+      server.middlewares.use("/api/change-password", async (req, res) => {
+        if (req.method === "OPTIONS") {
+          res.writeHead(204);
+          res.end();
+          return;
+        }
+        await run(req, res, "change_password");
+      });
+      server.middlewares.use("/api/complete-tutorial", async (req, res) => {
+        if (req.method === "OPTIONS") {
+          res.writeHead(204);
+          res.end();
+          return;
+        }
+        await run(req, res, "complete_tutorial");
+      });
+      server.middlewares.use("/api/db", async (req, res) => {
+        if (req.method === "OPTIONS") {
+          res.writeHead(204);
+          res.end();
+          return;
+        }
+        await run(req, res);
       });
     },
   };

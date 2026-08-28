@@ -26,7 +26,10 @@ export function ForcePasswordDialog() {
     setSaving(true);
     const err = await changePassword(current, next);
     setSaving(false);
-    if (err) setError(t(err as "profile.passwordWrong"));
+    if (err) {
+      const known = err === "profile.passwordWrong" || err === "profile.passwordShort" || err === "profile.passwordMismatch";
+      setError(known ? t(err) : t("profile.passwordWrong"));
+    }
   }
 
   return (

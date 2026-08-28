@@ -126,6 +126,7 @@ function NavSection({
         aria-expanded={open}
         aria-controls={`nav-section-${id}`}
         aria-label={t(open ? "nav.section.collapse" : "nav.section.expand", { section: label })}
+        data-tour={id}
         className="flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left text-[10px] font-semibold uppercase tracking-[0.16em] text-sidebar-foreground/40 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground/70"
       >
         <span>{label}</span>
@@ -272,20 +273,20 @@ function StaffNav({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <nav className="flex flex-col px-2">
-      <NavLink to="/" end onClick={onNavigate} className={({ isActive }) => linkClass(isActive)}>
+      <NavLink to="/" end onClick={onNavigate} data-tour="dashboard" className={({ isActive }) => linkClass(isActive)}>
         <LayoutDashboard className="size-4 shrink-0 opacity-80" />
         {t("nav.dashboard")}
       </NavLink>
-      <NavLink to="/documents" end onClick={onNavigate} className={({ isActive }) => linkClass(isActive)}>
+      <NavLink to="/documents" end onClick={onNavigate} data-tour="documents" className={({ isActive }) => linkClass(isActive)}>
         <FileText className="size-4 shrink-0 opacity-80" />
         {t("nav.documents")}
       </NavLink>
-      <NavLink to="/documents/projects" onClick={onNavigate} className={({ isActive }) => linkClass(isActive)}>
+      <NavLink to="/documents/projects" onClick={onNavigate} data-tour="projectsDocs" className={({ isActive }) => linkClass(isActive)}>
         <FolderKanban className="size-4 shrink-0 opacity-80" />
         {t("sp.tab.projects")}
       </NavLink>
       {user?.is_admin && user.view_as !== "client" ? (
-        <NavLink to="/reports" end onClick={onNavigate} className={({ isActive }) => linkClass(isActive)}>
+        <NavLink to="/reports" end onClick={onNavigate} data-tour="reports" className={({ isActive }) => linkClass(isActive)}>
           <Presentation className="size-4 shrink-0 opacity-80" />
           {t("nav.reports")}
         </NavLink>
@@ -479,6 +480,7 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
               onNavigate?.();
               navigate("/profile");
             }}
+            data-tour="profile"
             className="flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-0.5 py-0.5 text-left transition-colors hover:bg-sidebar-accent/70"
             aria-label={t("nav.profile")}
           >

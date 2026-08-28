@@ -159,6 +159,7 @@ export function ConfigUserPage() {
         is_admin: isAdmin,
         is_active: next,
         avatar_initials: target.avatar_initials,
+        must_change_password: mustChange,
       });
       setTarget(updated);
     } catch (err) {

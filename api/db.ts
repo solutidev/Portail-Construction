@@ -125,6 +125,8 @@ export async function loginUser(email: string, password: string) {
       locale: row.locale === "fr" ? "fr" : "en",
       theme: row.theme === "dark" ? "dark" : "light",
       all_clients: Number(row.all_clients ?? 1),
+      must_change_password: Number(row.must_change_password ?? 0),
+      tutorial_done: Number(row.tutorial_done ?? 0),
       created_at: row.created_at,
       password: "",
     },
@@ -166,6 +168,8 @@ function publicUser(row: unknown) {
     locale: data.locale === "fr" ? "fr" : "en",
     theme: data.theme === "dark" ? "dark" : "light",
     all_clients: Number(data.all_clients ?? 1),
+    must_change_password: Number(data.must_change_password ?? 0),
+    tutorial_done: Number(data.tutorial_done ?? 0),
     created_at: data.created_at,
     password: "",
   };
@@ -196,7 +200,7 @@ async function loadSessionUser(req: { headers?: Record<string, unknown> }) {
   if (!token) return null;
   const result = await getPool().query(
     `SELECT u.id, u.name, u.email, u.user_type, u.title, u.phone, u.is_active, u.is_admin,
-            u.avatar_initials, u.locale, u.theme, u.all_clients, u.created_at, s.expires_at,
+            u.avatar_initials, u.locale, u.theme, u.all_clients, u.must_change_password, u.tutorial_done, u.created_at, s.expires_at,
             COALESCE(s.view_as, 'admin') AS view_as
      FROM sessions s
      JOIN users u ON u.id = s.user_id
@@ -243,8 +247,31 @@ export async function requireApiUser(req: { headers?: Record<string, unknown> })
   return loadSessionUser(req);
 }
 
-export async function handleDbRequest(req: { method?: string; body?: any; headers?: Record<string, unknown> }, res: any) {
-  const action = String(req.body?.action ?? "");
+function parsedBody(req: { body?: any }) {
+  const raw = req.body;
+  if (raw && typeof raw === "object" && !Buffer.isBuffer(raw)) return raw as Record<string, unknown>;
+  if (typeof raw === "string" && raw.trim()) {
+    try {
+      return JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
+export async function handleDbRequest(req: { method?: string; body?: any; headers?: Record<string, unknown>; query?: Record<string, unknown>; url?: string }, res: any) {
+  const body = parsedBody(req);
+  req.body = body;
+  const urlAction = (() => {
+    try {
+      const q = new URL(String(req.url || ""), "http://local").searchParams.get("action");
+      return q || "";
+    } catch {
+      return "";
+    }
+  })();
+  const action = String(body.action ?? req.query?.action ?? urlAction ?? "");
   try {
     if (action === "ping" || req.method === "GET") {
       if (!hasRemoteDb()) {
@@ -362,6 +389,90 @@ export async function handleDbRequest(req: { method?: string; body?: any; header
         ]);
       }
       return res.status(200).json({ user: created });
+    }
+    if (action === "update_user") {
+      if (!hasRemoteDb()) {
+        return res.status(200).json({ local: true });
+      }
+      const session = await loadSessionUser(req);
+      if (!session) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+      if (Number(session.is_admin) !== 1) {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+      }
+      const id = Number(req.body?.id);
+      const name = String(req.body?.name ?? "").trim();
+      const email = String(req.body?.email ?? "").trim().toLowerCase();
+      if (!id || !name || !email) {
+        res.status(400).json({ error: "Name and email are required" });
+        return;
+      }
+      const title = String(req.body?.title ?? "").trim() || null;
+      const phone = String(req.body?.phone ?? "").trim() || null;
+      const isAdmin = Boolean(req.body?.is_admin) ? 1 : 0;
+      const isActive = req.body?.is_active === false ? 0 : 1;
+      const mustChange = req.body?.must_change_password ? 1 : 0;
+      const avatar = String(req.body?.avatar_initials ?? name).slice(0, 2).toUpperCase();
+      const password = String(req.body?.password ?? "");
+      if (password) {
+        const storedPassword = password.startsWith("pbkdf2$") ? password : hashPassword(password);
+        await getPool().query(
+          `UPDATE users SET name=$2, email=$3, title=$4, phone=$5, is_admin=$6, is_active=$7, avatar_initials=$8, must_change_password=$9, password=$10 WHERE id=$1`,
+          [id, name, email, title, phone, isAdmin, isActive, avatar, mustChange, storedPassword],
+        );
+      } else {
+        await getPool().query(
+          `UPDATE users SET name=$2, email=$3, title=$4, phone=$5, is_admin=$6, is_active=$7, avatar_initials=$8, must_change_password=$9 WHERE id=$1`,
+          [id, name, email, title, phone, isAdmin, isActive, avatar, mustChange],
+        );
+      }
+      const updated = await getPool().query(
+        `SELECT id, name, email, user_type, title, phone, is_active, is_admin, avatar_initials, locale, theme, all_clients, must_change_password, tutorial_done, created_at FROM users WHERE id=$1`,
+        [id],
+      );
+      return res.status(200).json({ user: publicUser(updated.rows[0]) });
+    }
+    if (action === "change_password") {
+      if (!hasRemoteDb()) {
+        return res.status(200).json({ local: true });
+      }
+      const session = await loadSessionUser(req);
+      if (!session) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+      const current = String(req.body?.current ?? "");
+      const next = String(req.body?.next ?? "");
+      if (next.trim().length < 8) {
+        res.status(400).json({ error: "profile.passwordShort" });
+        return;
+      }
+      const row = await getPool().query(`SELECT id, password FROM users WHERE id=$1 LIMIT 1`, [session.id]);
+      const stored = String(row.rows[0]?.password ?? "");
+      if (!verifyPassword(current, stored)) {
+        res.status(400).json({ error: "profile.passwordWrong" });
+        return;
+      }
+      await getPool().query(`UPDATE users SET password=$2, must_change_password=0 WHERE id=$1`, [
+        session.id,
+        hashPassword(next),
+      ]);
+      return res.status(200).json({ ok: true });
+    }
+    if (action === "complete_tutorial") {
+      if (!hasRemoteDb()) {
+        return res.status(200).json({ local: true });
+      }
+      const session = await loadSessionUser(req);
+      if (!session) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+      await getPool().query(`UPDATE users SET tutorial_done=1 WHERE id=$1`, [session.id]);
+      return res.status(200).json({ ok: true });
     }
     if (action === "view_as") {
       if (!hasRemoteDb()) {
