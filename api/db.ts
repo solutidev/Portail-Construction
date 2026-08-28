@@ -131,21 +131,40 @@ export async function loginUser(email: string, password: string) {
   };
 }
 
-function publicUser(row: Record<string, unknown>) {
+const PUBLIC_USER_COLUMNS = [
+  "id",
+  "name",
+  "email",
+  "user_type",
+  "title",
+  "phone",
+  "is_active",
+  "is_admin",
+  "avatar_initials",
+  "locale",
+  "theme",
+  "all_clients",
+  "created_at",
+] as const;
+
+function publicUser(row: unknown) {
+  const data = Array.isArray(row)
+    ? Object.fromEntries(PUBLIC_USER_COLUMNS.map((key, i) => [key, row[i]]))
+    : ((row ?? {}) as Record<string, unknown>);
   return {
-    id: Number(row.id),
-    name: String(row.name ?? ""),
-    email: String(row.email ?? ""),
-    user_type: String(row.user_type ?? "internal"),
-    title: row.title == null ? null : String(row.title),
-    phone: row.phone == null ? null : String(row.phone),
-    is_active: Number(row.is_active),
-    is_admin: Number(row.is_admin),
-    avatar_initials: row.avatar_initials == null ? null : String(row.avatar_initials),
-    locale: row.locale === "fr" ? "fr" : "en",
-    theme: row.theme === "dark" ? "dark" : "light",
-    all_clients: Number(row.all_clients ?? 1),
-    created_at: row.created_at,
+    id: Number(data.id),
+    name: String(data.name ?? ""),
+    email: String(data.email ?? ""),
+    user_type: String(data.user_type ?? "internal"),
+    title: data.title == null ? null : String(data.title),
+    phone: data.phone == null ? null : String(data.phone),
+    is_active: Number(data.is_active ?? 1),
+    is_admin: Number(data.is_admin ?? 0),
+    avatar_initials: data.avatar_initials == null ? null : String(data.avatar_initials),
+    locale: data.locale === "fr" ? "fr" : "en",
+    theme: data.theme === "dark" ? "dark" : "light",
+    all_clients: Number(data.all_clients ?? 1),
+    created_at: data.created_at,
     password: "",
   };
 }

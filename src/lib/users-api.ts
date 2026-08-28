@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import { db, schema } from "../db";
 import type { User } from "./types";
 
@@ -132,4 +133,39 @@ export async function createUser(input: {
   const created = rows.find((u) => u.email === input.email);
   if (!created) throw new Error(data.error || "User was not saved");
   return created;
+}
+
+export async function updateUser(input: {
+  id: number;
+  name: string;
+  email: string;
+  title?: string | null;
+  phone?: string | null;
+  is_admin?: boolean;
+  is_active?: boolean;
+  avatar_initials?: string | null;
+  password?: string;
+}): Promise<User> {
+  const { ok, data } = await postDb({ action: "update_user", ...input });
+  if (data.local) {
+    await db
+      .update(schema.users)
+      .set({
+        name: input.name,
+        email: input.email,
+        title: input.title ?? null,
+        phone: input.phone ?? null,
+        avatar_initials: input.avatar_initials ?? null,
+        is_admin: input.is_admin ? 1 : 0,
+        is_active: input.is_active === false ? 0 : 1,
+        ...(input.password ? { password: input.password } : {}),
+      })
+      .where(eq(schema.users.id, input.id));
+    const rows = await selectUsersFallback();
+    const updated = rows.find((u) => u.id === input.id);
+    if (!updated) throw new Error("User was not saved");
+    return updated;
+  }
+  if (ok && data.user) return rowToUser(data.user);
+  throw new Error(data.error || "Could not update user");
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { eq } from "drizzle-orm";
 import { ArrowLeft, Shield } from "lucide-react";
@@ -6,6 +6,9 @@ import { db, dbReady, schema } from "../../db";
 import { useAuth } from "@/lib/auth";
 import { useWorkspace } from "@/lib/workspace";
 import { groupFitsUser, setUserClients, setUserGroups } from "@/lib/access";
+import { initials } from "@/lib/format";
+import { hashPassword } from "@/lib/password";
+import { listUsers, updateUser } from "@/lib/users-api";
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -13,6 +16,8 @@ import { PageSkeleton } from "@/components/Skeleton";
 import { UserAvatar } from "@/components/UserAvatar";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useI18n } from "@/lib/i18n";
 import { GroupPicker } from "./GroupPicker";
@@ -35,20 +40,31 @@ export function ConfigUserPage() {
   const [allClients, setAllClients] = useState(true);
   const [active, setActive] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [profile, setProfile] = useState({ name: "", email: "", title: "", phone: "", password: "" });
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [profileSaved, setProfileSaved] = useState(false);
 
   async function load() {
     try {
       await dbReady;
-      const rows = await db.select().from(schema.users).where(eq(schema.users.id, id));
-      if (!rows[0]) {
+      const people = await listUsers();
+      const person = people.find((u) => u.id === id) ?? null;
+      if (!person) {
         setTarget(null);
         return;
       }
-      const person = rows[0] as User;
       setTarget(person);
       setActive(person.is_active === 1);
       setIsAdmin(person.is_admin === 1);
       setAllClients(person.all_clients !== 0);
+      setProfile({
+        name: person.name,
+        email: person.email,
+        title: person.title ?? "",
+        phone: person.phone ?? "",
+        password: "",
+      });
       setGroups((await db.select().from(schema.access_groups)) as AccessGroup[]);
       const mems = (await db
         .select()
@@ -91,18 +107,82 @@ export function ConfigUserPage() {
     if (me?.id === id) await refreshPermissions();
   }
 
+  async function saveProfile(e: FormEvent) {
+    e.preventDefault();
+    if (!target) return;
+    setSavingProfile(true);
+    setProfileError(null);
+    setProfileSaved(false);
+    try {
+      const name = profile.name.trim();
+      const email = profile.email.trim().toLowerCase();
+      const updated = await updateUser({
+        id: target.id,
+        name,
+        email,
+        title: profile.title.trim() || null,
+        phone: profile.phone.trim() || null,
+        is_admin: isAdmin,
+        is_active: active,
+        avatar_initials: initials(name),
+        password: profile.password.trim() ? await hashPassword(profile.password.trim()) : undefined,
+      });
+      setTarget(updated);
+      setProfile({
+        name: updated.name,
+        email: updated.email,
+        title: updated.title ?? "",
+        phone: updated.phone ?? "",
+        password: "",
+      });
+      setProfileSaved(true);
+    } catch (err) {
+      setProfileError(err instanceof Error ? err.message : "Could not update user");
+    } finally {
+      setSavingProfile(false);
+    }
+  }
+
   async function toggleAccount(next: boolean) {
     if (!target) return;
     setActive(next);
-    await db.update(schema.users).set({ is_active: next ? 1 : 0 }).where(eq(schema.users.id, target.id));
-    setTarget({ ...target, is_active: next ? 1 : 0 });
+    try {
+      const updated = await updateUser({
+        id: target.id,
+        name: target.name,
+        email: target.email,
+        title: target.title,
+        phone: target.phone,
+        is_admin: isAdmin,
+        is_active: next,
+        avatar_initials: target.avatar_initials,
+      });
+      setTarget(updated);
+    } catch (err) {
+      setActive(!next);
+      setProfileError(err instanceof Error ? err.message : "Could not update user");
+    }
   }
 
   async function toggleAdmin(next: boolean) {
     if (!target) return;
     setIsAdmin(next);
-    await db.update(schema.users).set({ is_admin: next ? 1 : 0 }).where(eq(schema.users.id, target.id));
-    setTarget({ ...target, is_admin: next ? 1 : 0 });
+    try {
+      const updated = await updateUser({
+        id: target.id,
+        name: target.name,
+        email: target.email,
+        title: target.title,
+        phone: target.phone,
+        is_admin: next,
+        is_active: active,
+        avatar_initials: target.avatar_initials,
+      });
+      setTarget(updated);
+    } catch (err) {
+      setIsAdmin(!next);
+      setProfileError(err instanceof Error ? err.message : "Could not update user");
+    }
   }
 
   async function toggleAllClients(next: boolean) {
@@ -173,6 +253,53 @@ export function ConfigUserPage() {
           </>
         }
       />
+
+      <form onSubmit={saveProfile} className="mb-6 rounded-xl border bg-card p-5">
+        <div className="mb-4">
+          <p className="text-sm font-medium">{t("people.profile")}</p>
+          <p className="text-xs text-muted-foreground">{t("people.profileHint")}</p>
+        </div>
+        {profileError ? <p className="mb-3 text-sm text-destructive">{profileError}</p> : null}
+        {profileSaved ? <p className="mb-3 text-sm text-primary">{t("people.saved")}</p> : null}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label>{t("people.fullName")}</Label>
+            <Input required value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>{t("people.email")}</Label>
+            <Input
+              type="email"
+              required
+              value={profile.email}
+              onChange={(e) => setProfile({ ...profile, email: e.target.value })}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>{t("people.titleField")}</Label>
+            <Input value={profile.title} onChange={(e) => setProfile({ ...profile, title: e.target.value })} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>{t("people.phone")}</Label>
+            <Input value={profile.phone} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} />
+          </div>
+        </div>
+        <div className="mt-4 space-y-1.5">
+          <Label>{t("people.newPassword")}</Label>
+          <Input
+            type="password"
+            autoComplete="new-password"
+            value={profile.password}
+            onChange={(e) => setProfile({ ...profile, password: e.target.value })}
+          />
+          <p className="text-xs text-muted-foreground">{t("people.newPasswordHint")}</p>
+        </div>
+        <div className="mt-4">
+          <Button type="submit" disabled={savingProfile}>
+            {savingProfile ? t("people.saving") : t("people.saveProfile")}
+          </Button>
+        </div>
+      </form>
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2">
         <div className="flex items-center justify-between rounded-xl border bg-card px-4 py-3">
