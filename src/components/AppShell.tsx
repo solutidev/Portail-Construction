@@ -50,6 +50,8 @@ import { useWorkspace } from "@/lib/workspace";
 import { isProjectSection, PROJECT_NAV_GROUPS, projectSectionPath } from "@/lib/project-nav";
 import { visibleProjectModules } from "@/lib/permissions";
 import { NAV_SECTIONS_KEY } from "@/lib/constants";
+import { ForcePasswordDialog } from "@/components/ForcePasswordDialog";
+import { MenuTour } from "@/components/MenuTour";
 import { cn } from "@/lib/utils";
 import type { MessageKey } from "@/lib/i18n/en";
 import type { ModuleId, ViewAsMode } from "@/lib/types";
@@ -541,6 +543,8 @@ export function AppShell() {
 
   return (
     <div className="flex min-h-screen bg-background">
+      <ForcePasswordDialog />
+      <MenuTour />
       <aside className="sticky top-0 hidden h-screen w-60 shrink-0 border-r border-sidebar-border bg-sidebar text-sidebar-foreground lg:block">
         <div className="h-1 w-full bg-primary" />
         <SidebarBody />

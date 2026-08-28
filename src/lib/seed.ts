@@ -110,6 +110,8 @@ async function upsertUser(values: {
       locale: values.locale,
       theme: "light",
       all_clients: values.all_clients ?? (values.user_type === "internal" ? 1 : 0),
+      must_change_password: 0,
+      tutorial_done: 0,
     })
     .returning();
   return row;

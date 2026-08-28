@@ -41,6 +41,7 @@ export function ConfigUserPage() {
   const [active, setActive] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [profile, setProfile] = useState({ name: "", email: "", title: "", phone: "", password: "" });
+  const [mustChange, setMustChange] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileSaved, setProfileSaved] = useState(false);
@@ -65,6 +66,7 @@ export function ConfigUserPage() {
         phone: person.phone ?? "",
         password: "",
       });
+      setMustChange(person.must_change_password === 1);
       setGroups((await db.select().from(schema.access_groups)) as AccessGroup[]);
       const mems = (await db
         .select()
@@ -126,6 +128,7 @@ export function ConfigUserPage() {
         is_active: active,
         avatar_initials: initials(name),
         password: profile.password.trim() ? await hashPassword(profile.password.trim()) : undefined,
+        must_change_password: mustChange,
       });
       setTarget(updated);
       setProfile({
@@ -294,6 +297,13 @@ export function ConfigUserPage() {
           />
           <p className="text-xs text-muted-foreground">{t("people.newPasswordHint")}</p>
         </div>
+        <label className="mt-4 flex items-start gap-2 text-sm">
+          <Checkbox checked={mustChange} onCheckedChange={(v) => setMustChange(v === true)} className="mt-0.5" />
+          <span>
+            {t("people.mustChange")}
+            <span className="mt-0.5 block text-xs text-muted-foreground">{t("people.mustChangeHint")}</span>
+          </span>
+        </label>
         <div className="mt-4">
           <Button type="submit" disabled={savingProfile}>
             {savingProfile ? t("people.saving") : t("people.saveProfile")}

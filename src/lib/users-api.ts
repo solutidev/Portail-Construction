@@ -16,6 +16,8 @@ const USER_COLUMNS = [
   "locale",
   "theme",
   "all_clients",
+  "must_change_password",
+  "tutorial_done",
   "created_at",
 ] as const;
 
@@ -37,6 +39,8 @@ function rowToUser(row: unknown): User {
     locale: data.locale === "fr" ? "fr" : "en",
     theme: data.theme === "dark" ? "dark" : "light",
     all_clients: Number(data.all_clients ?? 1),
+    must_change_password: Number(data.must_change_password ?? 0),
+    tutorial_done: Number(data.tutorial_done ?? 0),
     created_at: (data.created_at as Date) ?? new Date(),
   };
 }
@@ -89,6 +93,7 @@ export async function createUser(input: {
   is_admin?: boolean;
   avatar_initials?: string | null;
   groupIds?: number[];
+  must_change_password?: boolean;
 }): Promise<User> {
   const { ok, data } = await postDb({ action: "create_user", ...input });
   if (data.local) {
@@ -105,6 +110,8 @@ export async function createUser(input: {
       locale: "en",
       theme: "light",
       all_clients: input.user_type === "external" ? 0 : 1,
+      must_change_password: input.must_change_password === false ? 0 : 1,
+      tutorial_done: 0,
     });
     const rows = await selectUsersFallback();
     const created = rows.find((u) => u.email === input.email);
@@ -128,6 +135,8 @@ export async function createUser(input: {
     locale: "en",
     theme: "light",
     all_clients: input.user_type === "external" ? 0 : 1,
+    must_change_password: input.must_change_password === false ? 0 : 1,
+    tutorial_done: 0,
   });
   const rows = await selectUsersFallback();
   const created = rows.find((u) => u.email === input.email);
@@ -145,6 +154,7 @@ export async function updateUser(input: {
   is_active?: boolean;
   avatar_initials?: string | null;
   password?: string;
+  must_change_password?: boolean;
 }): Promise<User> {
   const { ok, data } = await postDb({ action: "update_user", ...input });
   if (data.local) {
@@ -158,6 +168,7 @@ export async function updateUser(input: {
         avatar_initials: input.avatar_initials ?? null,
         is_admin: input.is_admin ? 1 : 0,
         is_active: input.is_active === false ? 0 : 1,
+        must_change_password: input.must_change_password ? 1 : 0,
         ...(input.password ? { password: input.password } : {}),
       })
       .where(eq(schema.users.id, input.id));

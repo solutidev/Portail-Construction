@@ -334,10 +334,11 @@ export async function handleDbRequest(req: { method?: string; body?: any; header
         return;
       }
       const storedPassword = password.startsWith("pbkdf2$") ? password : hashPassword(password);
+      const mustChange = req.body?.must_change_password === false ? 0 : 1;
       const inserted = await getPool().query(
-        `INSERT INTO users (name, email, password, user_type, title, phone, is_active, is_admin, avatar_initials, locale, theme, all_clients)
-         VALUES ($1, $2, $3, $4, $5, $6, 1, $7, $8, 'en', 'light', $9)
-         RETURNING id, name, email, user_type, title, phone, is_active, is_admin, avatar_initials, locale, theme, all_clients, created_at`,
+        `INSERT INTO users (name, email, password, user_type, title, phone, is_active, is_admin, avatar_initials, locale, theme, all_clients, must_change_password, tutorial_done)
+         VALUES ($1, $2, $3, $4, $5, $6, 1, $7, $8, 'en', 'light', $9, $10, 0)
+         RETURNING id, name, email, user_type, title, phone, is_active, is_admin, avatar_initials, locale, theme, all_clients, must_change_password, tutorial_done, created_at`,
         [
           name,
           email,
@@ -348,6 +349,7 @@ export async function handleDbRequest(req: { method?: string; body?: any; header
           isAdmin,
           String(req.body?.avatar_initials ?? name).slice(0, 2).toUpperCase(),
           userType === "external" ? 0 : 1,
+          mustChange,
         ],
       );
       const created = publicUser(inserted.rows[0] as Record<string, unknown>);

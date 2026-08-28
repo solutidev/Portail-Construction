@@ -37,6 +37,7 @@ const empty = {
   phone: "",
   is_admin: false,
   groupIds: [] as number[],
+  must_change_password: true,
 };
 
 export function ConfigInternalUsersPage({ embedded = false }: { embedded?: boolean }) {
@@ -99,6 +100,7 @@ export function ConfigInternalUsersPage({ embedded = false }: { embedded?: boole
         is_admin: form.is_admin,
         avatar_initials: initials(name),
         groupIds: form.groupIds,
+        must_change_password: form.must_change_password,
       });
       await logActivity({
         action: "created user",
@@ -271,6 +273,18 @@ export function ConfigInternalUsersPage({ embedded = false }: { embedded?: boole
                 onChange={(e) => setForm({ ...form, is_admin: e.target.checked })}
               />
               {t("people.adminCheck")}
+            </label>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={form.must_change_password}
+                onChange={(e) => setForm({ ...form, must_change_password: e.target.checked })}
+              />
+              <span>
+                {t("people.mustChange")}
+                <span className="mt-0.5 block text-xs text-muted-foreground">{t("people.mustChangeHint")}</span>
+              </span>
             </label>
             <GroupPicker
               groups={internalGroups}

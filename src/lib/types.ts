@@ -16,6 +16,8 @@ export type User = {
   locale: Locale;
   theme: ThemePref;
   all_clients: number;
+  must_change_password: number;
+  tutorial_done: number;
   created_at: Date;
 };
 

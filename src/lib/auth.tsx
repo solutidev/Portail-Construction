@@ -55,6 +55,7 @@ type AuthContextValue = {
     theme?: ThemePref;
   }) => Promise<void>;
   changePassword: (current: string, next: string) => Promise<string | null>;
+  completeTutorial: () => Promise<void>;
   can: (module: ModuleId, action: Action, scope?: { projectId?: number; clientId?: number }) => boolean;
 };
 
@@ -75,6 +76,8 @@ function toSession(row: Record<string, unknown> | typeof schema.users.$inferSele
     locale: data.locale === "fr" ? "fr" : "en",
     theme: data.theme === "dark" ? "dark" : "light",
     all_clients: Number(data.all_clients ?? 1),
+    must_change_password: Number(data.must_change_password ?? 0),
+    tutorial_done: Number(data.tutorial_done ?? 0),
     created_at: (data.created_at as Date) ?? new Date(),
   };
 }
@@ -273,13 +276,57 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const changePassword = useCallback(
     async (current: string, next: string) => {
       if (!realUser) return "login.error.invalid";
+      if (next.trim().length < 8) return "profile.passwordShort";
+      try {
+        const res = await fetch("/api/db", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "change_password", current, next }),
+        });
+        const data = (await res.json().catch(() => ({}))) as { error?: string; local?: boolean };
+        if (!data.local && res.ok) {
+          setRealUser({ ...realUser, must_change_password: 0 });
+          return null;
+        }
+        if (!data.local && !res.ok) return String(data.error || "profile.passwordWrong");
+      } catch {
+        /* local fallback */
+      }
       const rows = await db.select().from(schema.users).where(eq(schema.users.id, realUser.id));
       if (!rows[0] || !(await verifyPassword(current, rows[0].password))) return "profile.passwordWrong";
-      await db.update(schema.users).set({ password: await hashPassword(next) }).where(eq(schema.users.id, realUser.id));
+      await db
+        .update(schema.users)
+        .set({ password: await hashPassword(next), must_change_password: 0 })
+        .where(eq(schema.users.id, realUser.id));
+      setRealUser({ ...realUser, must_change_password: 0 });
       return null;
     },
     [realUser],
   );
+
+  const completeTutorial = useCallback(async () => {
+    if (!realUser) return;
+    setRealUser({ ...realUser, tutorial_done: 1 });
+    try {
+      const res = await fetch("/api/db", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "complete_tutorial" }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { local?: boolean };
+      if (data.local) {
+        await db.update(schema.users).set({ tutorial_done: 1 }).where(eq(schema.users.id, realUser.id));
+      }
+    } catch {
+      try {
+        await db.update(schema.users).set({ tutorial_done: 1 }).where(eq(schema.users.id, realUser.id));
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [realUser]);
 
   const canFn = useCallback(
     (module: ModuleId, action: Action, scope?: { projectId?: number; clientId?: number }) =>
@@ -302,9 +349,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       refreshPermissions,
       updateProfile,
       changePassword,
+      completeTutorial,
       can: canFn,
     }),
-    [user, realUser, viewAs, setViewAs, permissions, ready, login, needsSetup, setupAdmin, logout, refreshPermissions, updateProfile, changePassword, canFn],
+    [user, realUser, viewAs, setViewAs, permissions, ready, login, needsSetup, setupAdmin, logout, refreshPermissions, updateProfile, changePassword, completeTutorial, canFn],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

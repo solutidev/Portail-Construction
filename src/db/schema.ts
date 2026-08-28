@@ -14,6 +14,8 @@ export const users = pgTable("users", {
   locale: text("locale").notNull(),
   theme: text("theme").notNull(),
   all_clients: integer("all_clients").notNull().default(1),
+  must_change_password: integer("must_change_password").notNull().default(0),
+  tutorial_done: integer("tutorial_done").notNull().default(0),
   created_at: timestamp("created_at").defaultNow().notNull(),
 });
 
