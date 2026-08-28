@@ -10,7 +10,7 @@ import {
 import { eq } from "drizzle-orm";
 import { db, dbReady, schema } from "../db";
 import { hashPassword, verifyPassword } from "./password";
-import { SESSION_KEY, VIEW_AS_KEY } from "./constants";
+import { SESSION_KEY, TUTORIAL_KEY, VIEW_AS_KEY } from "./constants";
 import { createFirstAdmin, hasAnyUsers, seedIfEmpty } from "./seed";
 import { loadAccessBundle, loadDefaultRolePermissions, mergeGroupPermissions } from "./access";
 import type { Locale, Permission, SessionUser, ThemePref, ViewAsMode } from "./types";
