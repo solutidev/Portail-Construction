@@ -84,23 +84,6 @@ export function LoginPage() {
         className="fill-[#fbaa19]/[0.07] stroke-[#51514e]/50 [mask-image:radial-gradient(ellipse_80%_70%_at_50%_50%,#000_40%,transparent)]"
       />
 
-      <div className="absolute top-5 right-5 z-10 flex gap-1 sm:top-8 sm:right-8">
-        {(["en", "fr"] as const).map((code) => (
-          <button
-            key={code}
-            type="button"
-            onClick={() => pickLang(code)}
-            className={`min-w-12 rounded-none border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] ${
-              locale === code
-                ? "border-[#fbaa19] bg-[#fbaa19] text-black"
-                : "border-[#51514e] text-[#8a8a86] hover:border-[#fbaa19] hover:text-[#fbaa19]"
-            }`}
-          >
-            {code}
-          </button>
-        ))}
-      </div>
-
       <div className="relative w-full max-w-[400px] overflow-hidden rounded-sm border border-[#51514e] bg-black p-10 sm:p-12">
         <BorderBeam
           size={140}
@@ -148,14 +131,9 @@ export function LoginPage() {
             <p className="mt-2 font-display text-[14px] font-semibold uppercase tracking-[0.32em] text-[#fbaa19] sm:text-[16px]">
               Construction
             </p>
-            <div className="mt-4 space-y-1.5 text-center">
-              <p className="font-display text-[11px] font-semibold uppercase tracking-[0.34em] text-[#fbaa19] sm:text-[13px]">
-                ON THE FRONT LINE
-              </p>
-              <p className="font-display text-[11px] font-semibold uppercase tracking-[0.34em] text-[#fbaa19] sm:text-[13px]">
-                EN PREMIÈRE LIGNE
-              </p>
-            </div>
+            <p className="mt-4 text-center font-display text-[11px] font-semibold uppercase tracking-[0.34em] text-[#fbaa19] sm:text-[13px]">
+              {locale === "fr" ? "EN PREMIÈRE LIGNE" : "ON THE FRONT LINE"}
+            </p>
             {needsSetup ? (
               <p className="mt-3 text-center text-[12px] leading-relaxed text-[#8a8a86]">{t("login.setup.hint")}</p>
             ) : null}

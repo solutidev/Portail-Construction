@@ -274,10 +274,14 @@ function ClockView({
           <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("punch.notePlaceholder")} rows={3} />
         </div>
 
-        {error && !blockOpen ? <p className="text-sm text-destructive">{error}</p> : null}
-
-        <Dialog open={blockOpen} onOpenChange={setBlockOpen}>
-          <DialogContent className="sm:max-w-md">
+        <Dialog
+          open={blockOpen}
+          onOpenChange={(next) => {
+            setBlockOpen(next);
+            if (!next) setError(null);
+          }}
+        >
+          <DialogContent className="z-[80] sm:max-w-md">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-destructive">
                 <MapPin className="size-5" />

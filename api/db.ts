@@ -218,6 +218,9 @@ export async function handleDbRequest(req: { method?: string; body?: any; header
   const action = String(req.body?.action ?? "");
   try {
     if (action === "ping" || req.method === "GET") {
+      if (!hasRemoteDb()) {
+        return res.status(200).json({ ok: true, users: 0, local: true });
+      }
       await ensureSchema();
       await ensureDemoUsers();
       const count = await getPool().query("SELECT count(*)::int AS n FROM users");
@@ -246,6 +249,9 @@ export async function handleDbRequest(req: { method?: string; body?: any; header
       return res.status(200).json({ user });
     }
     if (action === "view_as") {
+      if (!hasRemoteDb()) {
+        return res.status(200).json({ ok: true, view_as: String(req.body?.view_as ?? "admin"), local: true });
+      }
       const session = await loadSessionUser(req);
       if (!session) {
         res.status(401).json({ error: "Unauthorized" });
@@ -262,6 +268,9 @@ export async function handleDbRequest(req: { method?: string; body?: any; header
         await getPool().query("UPDATE sessions SET view_as = $2 WHERE token = $1", [token, viewAs]);
       }
       return res.status(200).json({ ok: true, view_as: viewAs });
+    }
+    if (!hasRemoteDb()) {
+      return res.status(200).json({ rows: [], local: true });
     }
     const session = await loadSessionUser(req);
     if (!session) {

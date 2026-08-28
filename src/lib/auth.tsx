@@ -182,7 +182,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
           return null;
         }
-        if (res.ok && data.error) return String(data.error);
+        if (res.ok && data.error && data.error !== "login.local") return String(data.error);
         if (res.status === 401 || res.status === 403) return String(data.error || "login.error.invalid");
       } catch {
         /* fall through to local store when the API is unavailable */
