@@ -259,6 +259,86 @@ export async function handleDbRequest(req: { method?: string; body?: any; header
       const user = await loadSessionUser(req);
       return res.status(200).json({ user });
     }
+    if (action === "list_users") {
+      if (!hasRemoteDb()) {
+        return res.status(200).json({ users: [], local: true });
+      }
+      const session = await loadSessionUser(req);
+      if (!session) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+      if (Number(session.is_admin) !== 1) {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+      }
+      const result = await getPool().query(
+        `SELECT id, name, email, user_type, title, phone, is_active, is_admin, avatar_initials, locale, theme, all_clients, created_at
+         FROM users
+         ORDER BY id ASC`,
+      );
+      return res.status(200).json({
+        users: (result.rows as Record<string, unknown>[]).map((row) => publicUser(row)),
+      });
+    }
+    if (action === "create_user") {
+      if (!hasRemoteDb()) {
+        return res.status(200).json({ local: true });
+      }
+      const session = await loadSessionUser(req);
+      if (!session) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+      if (Number(session.is_admin) !== 1) {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+      }
+      const name = String(req.body?.name ?? "").trim();
+      const email = String(req.body?.email ?? "").trim().toLowerCase();
+      const password = String(req.body?.password ?? "");
+      const userType = req.body?.user_type === "external" ? "external" : "internal";
+      const title = String(req.body?.title ?? "").trim() || null;
+      const phone = String(req.body?.phone ?? "").trim() || null;
+      const isAdmin = userType === "internal" && Boolean(req.body?.is_admin) ? 1 : 0;
+      const groupIds = Array.isArray(req.body?.groupIds)
+        ? req.body.groupIds.map((id: unknown) => Number(id)).filter((id: number) => Number.isInteger(id) && id > 0)
+        : [];
+      if (!name || !email || !password) {
+        res.status(400).json({ error: "Name, email, and password are required" });
+        return;
+      }
+      const existing = await getPool().query("SELECT id FROM users WHERE lower(email) = $1 LIMIT 1", [email]);
+      if (existing.rows[0]) {
+        res.status(409).json({ error: "A user with this email already exists." });
+        return;
+      }
+      const storedPassword = password.startsWith("pbkdf2$") ? password : hashPassword(password);
+      const inserted = await getPool().query(
+        `INSERT INTO users (name, email, password, user_type, title, phone, is_active, is_admin, avatar_initials, locale, theme, all_clients)
+         VALUES ($1, $2, $3, $4, $5, $6, 1, $7, $8, 'en', 'light', $9)
+         RETURNING id, name, email, user_type, title, phone, is_active, is_admin, avatar_initials, locale, theme, all_clients, created_at`,
+        [
+          name,
+          email,
+          storedPassword,
+          userType,
+          title,
+          phone,
+          isAdmin,
+          String(req.body?.avatar_initials ?? name).slice(0, 2).toUpperCase(),
+          userType === "external" ? 0 : 1,
+        ],
+      );
+      const created = publicUser(inserted.rows[0] as Record<string, unknown>);
+      for (const groupId of groupIds) {
+        await getPool().query("INSERT INTO user_access_groups (user_id, group_id) VALUES ($1, $2)", [
+          created.id,
+          groupId,
+        ]);
+      }
+      return res.status(200).json({ user: created });
+    }
     if (action === "view_as") {
       if (!hasRemoteDb()) {
         return res.status(200).json({ ok: true, view_as: String(req.body?.view_as ?? "admin"), local: true });

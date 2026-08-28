@@ -1,12 +1,12 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { eq } from "drizzle-orm";
 import { Plus, Search, Users } from "lucide-react";
 import { db, dbReady, schema } from "../../db";
 import { useAuth } from "@/lib/auth";
 import { initials } from "@/lib/format";
 import { logActivity } from "@/lib/activity";
-import { groupFitsUser, isDefaultStaffGroup, setUserGroups } from "@/lib/access";
+import { groupFitsUser, isDefaultStaffGroup } from "@/lib/access";
+import { createUser, listUsers } from "@/lib/users-api";
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -54,8 +54,8 @@ export function ConfigInternalUsersPage({ embedded = false }: { embedded?: boole
 
   async function load() {
     await dbReady;
-    const rows = (await db.select().from(schema.users)) as User[];
-    setPeople(rows.filter((p) => p.user_type === "internal"));
+    const rows = await listUsers();
+    setPeople(rows.filter((p) => String(p.user_type) !== "external"));
     setGroups((await db.select().from(schema.access_groups)) as AccessGroup[]);
     setMemberships((await db.select().from(schema.user_access_groups)) as UserAccessGroup[]);
     setLoading(false);
@@ -84,29 +84,17 @@ export function ConfigInternalUsersPage({ embedded = false }: { embedded?: boole
     const email = form.email.trim().toLowerCase();
     const name = form.name.trim();
     try {
-      const existing = await db.select().from(schema.users).where(eq(schema.users.email, email));
-      if (existing.length) {
-        setFormError("A user with this email already exists.");
-        return;
-      }
-      await db.insert(schema.users).values({
+      await createUser({
         name,
         email,
         password: await hashPassword(form.password.trim() || randomPassword()),
         user_type: "internal",
         title: form.title.trim() || null,
         phone: form.phone.trim() || null,
-        is_active: 1,
-        is_admin: form.is_admin ? 1 : 0,
+        is_admin: form.is_admin,
         avatar_initials: initials(name),
-        locale: "en",
-        theme: "light",
-        all_clients: 1,
+        groupIds: form.groupIds,
       });
-      const createdRows = (await db.select().from(schema.users).where(eq(schema.users.email, email))) as User[];
-      const created = createdRows[0];
-      if (!created) throw new Error("User was not saved");
-      if (form.groupIds.length) await setUserGroups(created.id, form.groupIds);
       await logActivity({
         action: "created user",
         details: `${name} (internal)`,
