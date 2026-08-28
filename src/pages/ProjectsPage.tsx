@@ -332,10 +332,22 @@ export function ProjectsPage() {
               </Button>
             )}
             {canEdit && (
-              <Button onClick={() => setAddOpen(true)}>
-                <Plus className="size-4" />
-                {t("projects.addColumn")}
-              </Button>
+              <>
+                <Button
+                  onClick={() => {
+                    setPForm(emptyProjectForm);
+                    setNewClientId(selectedClientId ?? "");
+                    setProjectOpen(true);
+                  }}
+                >
+                  <Plus className="size-4" />
+                  {t("projects.new")}
+                </Button>
+                <Button variant="outline" onClick={() => setAddOpen(true)}>
+                  <Plus className="size-4" />
+                  {t("projects.addColumn")}
+                </Button>
+              </>
             )}
           </div>
         }

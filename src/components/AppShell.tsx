@@ -509,7 +509,7 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
 export function AppShell() {
   const { theme, toggle } = useTheme();
   const { realUser, viewAs, setViewAs, updateProfile } = useAuth();
-  const { t } = useI18n();
+  const { t, locale, setLocale } = useI18n();
   const navigate = useNavigate();
   const location = useLocation();
   const { activeProject, selectedClientId } = useWorkspace();
@@ -609,6 +609,26 @@ export function AppShell() {
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : null}
+            <div className="flex items-center overflow-hidden rounded-md border border-border">
+              {(["en", "fr"] as const).map((code) => (
+                <button
+                  key={code}
+                  type="button"
+                  onClick={() => {
+                    setLocale(code);
+                    void updateProfile({ locale: code });
+                  }}
+                  className={cn(
+                    "px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em]",
+                    locale === code
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {code}
+                </button>
+              ))}
+            </div>
             <Button
               variant="ghost"
               size="icon-sm"

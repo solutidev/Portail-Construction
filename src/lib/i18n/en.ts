@@ -1,5 +1,6 @@
 export const en = {
   "brand.construction": "Construction",
+  "brand.slogan": "ON THE FRONT LINE",
   "nav.workspace": "Workspace",
   "nav.dashboard": "Dashboard",
   "nav.documents": "Documentation",

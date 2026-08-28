@@ -24,6 +24,25 @@ docker compose version
 
 Open host port **8080** (or change `PORT` later).
 
+## Wipe production for a clean slate
+
+This **deletes all Postgres data** (clients, projects, users except what seed recreates). Then the app starts with **only**:
+
+- Email: `admin@frxconstruction.ca`
+- Password: `admin123`
+
+Sign in, create your real admin, then delete this default account.
+
+```bash
+cd /opt/frx-portal
+sudo docker compose down -v
+sudo bash scripts/update.sh
+```
+
+`down -v` removes the database volume. `update.sh` pulls `main` and rebuilds. Hard-refresh the browser, then log in with the default admin.
+
+Do **not** run `down -v` for a normal update — that wipes data.
+
 ## 1. Remove any previous broken install
 
 Only do this if you want a **true first launch**. This deletes the old Postgres volume.

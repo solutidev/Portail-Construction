@@ -2,6 +2,7 @@ import type { MessageKey } from "./en";
 
 export const fr: Record<MessageKey, string> = {
   "brand.construction": "Construction",
+  "brand.slogan": "EN PREMIÈRE LIGNE",
   "nav.workspace": "Espace de travail",
   "nav.dashboard": "Tableau de bord",
   "nav.documents": "Documentation",

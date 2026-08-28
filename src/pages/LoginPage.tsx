@@ -102,7 +102,24 @@ export function LoginPage() {
         />
 
         <form onSubmit={onSubmit} className="relative space-y-5">
-          <div className="flex flex-col items-center pb-6">
+          <div className="flex justify-center gap-1 pb-2">
+            {(["en", "fr"] as const).map((code) => (
+              <button
+                key={code}
+                type="button"
+                onClick={() => pickLang(code)}
+                className={`min-w-12 rounded-none border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] ${
+                  locale === code
+                    ? "border-[#fbaa19] bg-[#fbaa19] text-black"
+                    : "border-[#51514e] text-[#8a8a86] hover:border-[#fbaa19] hover:text-[#fbaa19]"
+                }`}
+              >
+                {code}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex flex-col items-center pb-4">
             <img
               src="/brand/logo-icon.png"
               alt=""
@@ -111,27 +128,15 @@ export function LoginPage() {
             <p className="mt-4 font-display text-[22px] font-semibold uppercase leading-none tracking-[0.18em] text-white sm:text-[24px]">
               FRX
             </p>
-            <p className="mt-1.5 font-display text-[11px] font-medium uppercase tracking-[0.38em] text-[#fbaa19]">
-              {needsSetup ? t("login.setup.title") : t("brand.construction")}
+            <p className="mt-2 font-display text-[13px] font-semibold uppercase tracking-[0.28em] text-[#fbaa19] sm:text-[15px]">
+              {t("brand.construction")}
+            </p>
+            <p className="mt-2 text-center font-display text-[10px] font-medium uppercase tracking-[0.32em] text-white/80 sm:text-[11px]">
+              {t("brand.slogan")}
             </p>
             {needsSetup ? (
               <p className="mt-3 text-center text-[12px] leading-relaxed text-[#8a8a86]">{t("login.setup.hint")}</p>
             ) : null}
-          </div>
-
-          <div className="flex justify-center gap-1">
-            {(["en", "fr"] as const).map((code) => (
-              <button
-                key={code}
-                type="button"
-                onClick={() => pickLang(code)}
-                className={`px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${
-                  locale === code ? "text-[#fbaa19]" : "text-[#8a8a86] hover:text-white"
-                }`}
-              >
-                {code}
-              </button>
-            ))}
           </div>
 
           {needsSetup ? (
