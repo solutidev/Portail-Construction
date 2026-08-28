@@ -23,6 +23,10 @@ function statementsOf(sql: string) {
     .filter(Boolean);
 }
 
+function hasRemoteDb() {
+  return Boolean(process.env.DATABASE_URL?.trim() || process.env.POSTGRES_PASSWORD?.trim());
+}
+
 function databaseUrl() {
   if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
   const user = process.env.POSTGRES_USER || "frx";
