@@ -609,7 +609,7 @@ export function AppShell() {
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : null}
-            <div className="flex items-center overflow-hidden rounded-md border border-border">
+            <div className="flex items-center overflow-hidden rounded-sm border border-primary/40">
               {(["en", "fr"] as const).map((code) => (
                 <button
                   key={code}
@@ -619,10 +619,10 @@ export function AppShell() {
                     void updateProfile({ locale: code });
                   }}
                   className={cn(
-                    "px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em]",
+                    "min-w-10 px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em]",
                     locale === code
                       ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:text-foreground",
+                      : "bg-background text-muted-foreground hover:text-foreground",
                   )}
                 >
                   {code}

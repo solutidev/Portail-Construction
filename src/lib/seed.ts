@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { db, dbReady, schema } from "../db";
-import { initials, isoDate } from "./format";
+import { initials } from "./format";
 import { ensureDefaultGroups } from "./access";
 import { hashPassword, isHashedPassword } from "./password";
 
@@ -35,99 +35,6 @@ export async function seedIfEmpty() {
     });
   }
   return seedPromise;
-}
-
-async function seedBillingIfEmpty() {
-  const existing = await db.select().from(schema.billing_documents).limit(1);
-  if (existing.length > 0) return;
-  const clients = await db.select().from(schema.clients);
-  const projects = await db.select().from(schema.projects);
-  const nordique = clients.find((c) => c.company_name === "Nordique Immobilier");
-  const harbour = clients.find((c) => c.company_name === "Harbour Development");
-  const plaza = projects.find((p) => p.project_number === "FOR-2408");
-  const warehouse = projects.find((p) => p.project_number === "FOR-2412");
-  const quay = projects.find((p) => p.project_number === "FOR-2319");
-  if (!nordique || !harbour || !plaza || !warehouse || !quay) return;
-  await db.insert(schema.billing_documents).values([
-    {
-      client_id: nordique.id,
-      project_id: plaza.id,
-      kind: "quote",
-      number: "SOU-2408",
-      title: "Plaza Saint-Laurent — envelope package",
-      description: "Curtain wall, roofing, and storefront package for the commercial podium.",
-      amount: 1840000,
-      status: "accepted",
-      issued_on: isoDate(-210),
-      due_on: isoDate(-180),
-      notes: "Accepted with a 4-week shop-drawing window.",
-    },
-    {
-      client_id: nordique.id,
-      project_id: warehouse.id,
-      kind: "quote",
-      number: "SOU-2412",
-      title: "Anjou Cold Storage — freezer envelope",
-      description: "Insulated metal panels, dock seals, and vapor barrier.",
-      amount: 960000,
-      status: "sent",
-      issued_on: isoDate(-18),
-      due_on: isoDate(12),
-      notes: "Waiting on owner review of the freezer slab alternate.",
-    },
-    {
-      client_id: nordique.id,
-      project_id: plaza.id,
-      kind: "invoice",
-      number: "FAC-2409-01",
-      title: "Progress billing 01 — foundations",
-      description: "Mobilization, excavation, and foundation walls through August.",
-      amount: 1285000,
-      status: "paid",
-      issued_on: isoDate(-150),
-      due_on: isoDate(-120),
-      notes: "Paid by wire on the due date.",
-    },
-    {
-      client_id: nordique.id,
-      project_id: plaza.id,
-      kind: "invoice",
-      number: "FAC-2410-02",
-      title: "Progress billing 02 — structure",
-      description: "Steel erection and concrete decks, levels 2–5.",
-      amount: 2140000,
-      status: "sent",
-      issued_on: isoDate(-28),
-      due_on: isoDate(2),
-      notes: "Holdback retained per contract.",
-    },
-    {
-      client_id: harbour.id,
-      project_id: quay.id,
-      kind: "quote",
-      number: "SOU-2311",
-      title: "Quay 12 Residences — interiors fit-out",
-      description: "Typical-floor interiors, amenity level, and lobby millwork.",
-      amount: 6720000,
-      status: "accepted",
-      issued_on: isoDate(-300),
-      due_on: isoDate(-270),
-      notes: null,
-    },
-    {
-      client_id: harbour.id,
-      project_id: quay.id,
-      kind: "invoice",
-      number: "FAC-2407-08",
-      title: "Progress billing 08 — envelope",
-      description: "Curtain wall, balcony rails, and roofing through July.",
-      amount: 3180000,
-      status: "overdue",
-      issued_on: isoDate(-45),
-      due_on: isoDate(-15),
-      notes: "Follow-up sent to Harbour Development AP.",
-    },
-  ]);
 }
 
 export async function hasAnyUsers() {
@@ -167,7 +74,7 @@ async function upsertUser(values: {
   password: string;
   user_type: "internal" | "external";
   title: string;
-  phone: string;
+  phone: string | null;
   is_admin: number;
   locale: "en" | "fr";
   all_clients?: number;
@@ -220,8 +127,8 @@ async function seedIfEmptyInner() {
     email: "admin@frxconstruction.ca",
     password: "admin123",
     user_type: "internal",
-    title: "Director of Operations",
-    phone: "450-555-0100",
+    title: "Administrator",
+    phone: null,
     is_admin: 1,
     locale: "en",
     all_clients: 1,
