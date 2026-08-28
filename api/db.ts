@@ -81,8 +81,12 @@ async function ensureDemoUsers() {
 export async function runSql(sql: string, params: unknown[] = []) {
   await ensureSchema();
   await ensureDemoUsers();
+  let text = sql;
+  if (/^\s*insert\b/i.test(text) && !/\breturning\b/i.test(text)) {
+    text = `${text.replace(/;+\s*$/, "")} RETURNING *`;
+  }
   const result = await getPool().query({
-    text: sql,
+    text,
     values: params,
     rowMode: "array",
   });

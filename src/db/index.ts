@@ -15,10 +15,10 @@ async function remoteQuery(sql: string, params: unknown[], _method: "all" | "exe
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ sql, params }),
   });
+  const data = (await res.json().catch(() => ({}))) as { rows?: unknown[][]; error?: string };
   if (!res.ok) {
-    throw new Error("Database error");
+    throw new Error(data.error || `Database error (${res.status})`);
   }
-  const data = (await res.json()) as { rows: unknown[][] };
   return { rows: data.rows ?? [] };
 }
 

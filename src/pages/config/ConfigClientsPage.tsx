@@ -175,11 +175,11 @@ export function ConfigClientsPage({ embedded = false }: { embedded?: boolean }) 
     e.preventDefault();
     if (!inviteFor || !userForm.name.trim() || !userForm.email.trim()) return;
     setSaving(true);
-    const [created] = await db
-      .insert(schema.users)
-      .values({
+    try {
+      const email = userForm.email.trim().toLowerCase();
+      await db.insert(schema.users).values({
         name: userForm.name.trim(),
-        email: userForm.email.trim().toLowerCase(),
+        email,
         password: await hashPassword(userForm.password.trim() || randomPassword()),
         user_type: "external",
         title: userForm.title.trim() || null,
@@ -190,24 +190,30 @@ export function ConfigClientsPage({ embedded = false }: { embedded?: boolean }) 
         locale: "en",
         theme: "light",
         all_clients: 0,
-      })
-      .returning();
-    await db.insert(schema.client_users).values({
-      client_id: inviteFor.id,
-      user_id: created.id,
-      is_primary: userForm.is_primary ? 1 : 0,
-    });
-    if (userForm.groupIds.length) await setUserGroups(created.id, userForm.groupIds);
-    await logActivity({
-      action: "added client user",
-      details: created.name,
-      clientId: inviteFor.id,
-      userId: user?.id,
-    });
-    setSaving(false);
-    setInviteFor(null);
-    setUserForm(emptyUser);
-    await load();
+      });
+      const createdRows = (await db.select().from(schema.users).where(eq(schema.users.email, email))) as User[];
+      const created = createdRows[0];
+      if (!created) throw new Error("User was not saved");
+      await db.insert(schema.client_users).values({
+        client_id: inviteFor.id,
+        user_id: created.id,
+        is_primary: userForm.is_primary ? 1 : 0,
+      });
+      if (userForm.groupIds.length) await setUserGroups(created.id, userForm.groupIds);
+      await logActivity({
+        action: "added client user",
+        details: created.name,
+        clientId: inviteFor.id,
+        userId: user?.id,
+      });
+      setInviteFor(null);
+      setUserForm(emptyUser);
+      await load();
+    } catch (err) {
+      console.error("invite user failed", err);
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function onDeleteClient() {

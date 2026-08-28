@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { eq } from "drizzle-orm";
 import { Plus, Search, Users } from "lucide-react";
 import { db, dbReady, schema } from "../../db";
 import { useAuth } from "@/lib/auth";
@@ -39,7 +40,7 @@ const empty = {
 };
 
 export function ConfigInternalUsersPage({ embedded = false }: { embedded?: boolean }) {
-  const { user } = useAuth();
+  const { realUser } = useAuth();
   const { t } = useI18n();
   const [loading, setLoading] = useState(true);
   const [people, setPeople] = useState<User[]>([]);
@@ -49,6 +50,7 @@ export function ConfigInternalUsersPage({ embedded = false }: { embedded?: boole
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(empty);
   const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   async function load() {
     await dbReady;
@@ -76,39 +78,53 @@ export function ConfigInternalUsersPage({ embedded = false }: { embedded?: boole
 
   async function onCreate(e: FormEvent) {
     e.preventDefault();
-    if (!user?.is_admin) return;
+    if (!realUser?.is_admin) return;
     setSaving(true);
-    const [created] = await db
-      .insert(schema.users)
-      .values({
-        name: form.name.trim(),
-        email: form.email.trim().toLowerCase(),
+    setFormError(null);
+    const email = form.email.trim().toLowerCase();
+    const name = form.name.trim();
+    try {
+      const existing = await db.select().from(schema.users).where(eq(schema.users.email, email));
+      if (existing.length) {
+        setFormError("A user with this email already exists.");
+        return;
+      }
+      await db.insert(schema.users).values({
+        name,
+        email,
         password: await hashPassword(form.password.trim() || randomPassword()),
         user_type: "internal",
         title: form.title.trim() || null,
         phone: form.phone.trim() || null,
         is_active: 1,
         is_admin: form.is_admin ? 1 : 0,
-        avatar_initials: initials(form.name.trim()),
+        avatar_initials: initials(name),
         locale: "en",
         theme: "light",
         all_clients: 1,
-      })
-      .returning();
-    if (form.groupIds.length) await setUserGroups(created.id, form.groupIds);
-    await logActivity({
-      action: "created user",
-      details: `${form.name} (internal)`,
-      userId: user?.id,
-    });
-    setSaving(false);
-    setOpen(false);
-    setForm(empty);
-    await load();
+      });
+      const createdRows = (await db.select().from(schema.users).where(eq(schema.users.email, email))) as User[];
+      const created = createdRows[0];
+      if (!created) throw new Error("User was not saved");
+      if (form.groupIds.length) await setUserGroups(created.id, form.groupIds);
+      await logActivity({
+        action: "created user",
+        details: `${name} (internal)`,
+        userId: realUser.id,
+      });
+      setOpen(false);
+      setForm(empty);
+      await load();
+    } catch (err) {
+      console.error("create user failed", err);
+      setFormError(err instanceof Error ? err.message : "Could not create user");
+    } finally {
+      setSaving(false);
+    }
   }
 
   if (loading) return <PageSkeleton />;
-  if (!user?.is_admin) {
+  if (!realUser?.is_admin) {
     return (
       <EmptyState
         icon={<Users className="size-5" />}
@@ -240,6 +256,7 @@ export function ConfigInternalUsersPage({ embedded = false }: { embedded?: boole
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
               />
             </div>
+            {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label>{t("people.titleField")}</Label>
